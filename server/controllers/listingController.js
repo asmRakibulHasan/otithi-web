@@ -2,6 +2,7 @@ import fs from 'fs';
 import mongoose from 'mongoose';
 import Listing, { CHECKLIST, SAFETY_KEYS } from '../models/Listing.js';
 import Village from '../models/Village.js';
+import { listingRatings } from './reviewController.js';
 
 const list = (value) => String(value).split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -88,7 +89,8 @@ export async function searchListings(req, res) {
   // A group can split across rooms, so a single listing doesn't need to fit everyone.
   // `guests` only marks which listings fit alone; the frontend uses it for the "fits your group" note.
   const guests = Number(q.guests) || 0;
-  res.json(listings.map((l) => ({ ...l, fitsGroup: !guests || l.capacity >= guests })));
+  const ratings = await listingRatings(listings.map((l) => l._id));
+  res.json(listings.map((l) => ({ ...l, rating: ratings[String(l._id)] || null, fitsGroup: !guests || l.capacity >= guests })));
 }
 
 // GET /api/listings/:id — approved listings for everyone; owner and admin also see pending ones
@@ -110,7 +112,8 @@ export async function getListing(req, res) {
   // Full directions are unlocked by an accepted booking (Phase 4)
   if (!isOwner && !isAdmin) delete listing.directions;
 
-  res.json({ ...listing, canSeeDirections: Boolean(isOwner || isAdmin) });
+  const ratings = await listingRatings([listing._id]);
+  res.json({ ...listing, rating: ratings[String(listing._id)] || null, canSeeDirections: Boolean(isOwner || isAdmin) });
 }
 
 // GET /api/listings/mine — host's own rooms, any status

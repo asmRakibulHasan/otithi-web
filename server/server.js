@@ -11,6 +11,8 @@ import locationRoutes from './routes/locations.js';
 import listingRoutes from './routes/listings.js';
 import adminRoutes from './routes/admin.js';
 import bookingRoutes from './routes/bookings.js';
+import reviewRoutes from './routes/reviews.js';
+import reportRoutes from './routes/reports.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -25,6 +27,8 @@ app.use('/api', locationRoutes);
 app.use('/api/listings', listingRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/reports', reportRoutes);
 
 // 404 for unknown API routes
 app.use('/api', (req, res) => res.status(404).json({ message: 'Route not found' }));

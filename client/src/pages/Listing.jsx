@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Heart, ShieldCheck, Users, BedDouble, DoorOpen, Soup, MapPin, Landmark, Lock, Check, Minus } from 'lucide-react';
+import { Heart, ShieldCheck, Users, BedDouble, DoorOpen, Soup, MapPin, Landmark, Lock, Check, Minus, Flag } from 'lucide-react';
 import useApi from '../hooks/useApi.js';
 import Card from '../components/Card.jsx';
 import Chip from '../components/Chip.jsx';
@@ -8,7 +8,13 @@ import Button from '../components/Button.jsx';
 import Photo from '../components/Photo.jsx';
 import { Loading, ErrorBox } from '../components/State.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import Stars from '../components/Stars.jsx';
+import ReportDialog from '../components/ReportDialog.jsx';
 import { CHECKLIST, SAFETY, answer, toneWord, taka } from '../lib/listing.js';
+import { fmtDay } from '../lib/booking.js';
+
+const accuracyText = { yes: 'Checklist was accurate', mostly: 'Checklist mostly accurate', no: 'Checklist was not accurate' };
+const accuracyTone = { yes: 'good', mostly: 'warn', no: 'bad' };
 
 const SAVED_KEY = 'otithi_saved';
 const readSaved = () => {
@@ -25,6 +31,8 @@ export default function Listing() {
   const { data: l, loading, error } = useApi(`/listings/${id}`);
   const [saved, setSaved] = useState(() => readSaved().includes(id));
   const [req, setReq] = useState({ checkIn: '', checkOut: '', guests: 1 });
+  const [reporting, setReporting] = useState(false);
+  const { data: reviews } = useApi(`/reviews/listing/${id}`);
 
   if (loading) return <Loading />;
   if (error) return <div className="wrap py-10"><ErrorBox message={error} /></div>;
@@ -62,12 +70,24 @@ export default function Listing() {
             <Link to={`/browse?district=${v?.district?._id}`}>{v?.district?.name}</Link> › <Link to={`/village/${v?._id}`}>{v?.name}</Link> › {l.host?.name}&apos;s house
           </div>
           <h1 className="text-3xl font-extrabold md:text-4xl">{l.title}</h1>
-          <div className="text-muted">{v?.name}, {v?.area} · {v?.district?.name}</div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted">
+            <Stars rating={l.rating} />
+            <span>{v?.name}, {v?.area} · {v?.district?.name}</span>
+            {l.rating?.count > 0 && <span className="font-semibold text-paddy">{l.rating.accuratePct}% say the checklist was accurate</span>}
+          </div>
         </div>
-        <Button variant="ghost" onClick={toggleSave} aria-pressed={saved}>
-          <Heart size={18} aria-hidden="true" className={saved ? 'fill-danger text-danger' : ''} />{saved ? 'Saved' : 'Save'}
-        </Button>
+        <div className="flex gap-1">
+          <Button variant="ghost" onClick={toggleSave} aria-pressed={saved}>
+            <Heart size={18} aria-hidden="true" className={saved ? 'fill-danger text-danger' : ''} />{saved ? 'Saved' : 'Save'}
+          </Button>
+          {l.status === 'approved' && user?._id !== l.host?._id && (
+            <Button variant="ghost" onClick={() => (user ? setReporting(true) : navigate('/login', { state: { from: `/listing/${id}` } }))}>
+              <Flag size={18} aria-hidden="true" />Report
+            </Button>
+          )}
+        </div>
       </div>
+      {reporting && <ReportDialog listing={id} against={`${l.host?.name}'s room`} onClose={() => setReporting(false)} />}
 
       {/* Gallery */}
       <div className="grid h-72 gap-3 overflow-hidden rounded-card md:h-[420px] md:grid-cols-4 md:grid-rows-2">
@@ -163,9 +183,28 @@ export default function Listing() {
             </Card>
           )}
 
-          <Card className="flex flex-col gap-2 p-6">
-            <h2 className="text-xl font-bold">Reviews</h2>
-            <p className="text-muted">No reviews yet. Guests can review after their stay.</p>
+          <Card className="flex flex-col gap-4 p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-xl font-bold">Reviews</h2>
+              <Stars rating={l.rating} className="text-lg" />
+            </div>
+            {!reviews?.reviews.length && <p className="text-muted">No reviews yet. Guests can review after their stay.</p>}
+            <ul className="flex flex-col gap-5">
+              {reviews?.reviews.map((r) => (
+                <li key={r._id} className="flex flex-col gap-2 border-t border-line pt-4 first:border-0 first:pt-0">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-paddy-soft text-sm font-bold text-paddy">{initials(r.author?.name)}</span>
+                    <span className="flex-1">
+                      <span className="block font-semibold">{r.author?.name}</span>
+                      <span className="text-sm text-muted">Stayed {fmtDay(r.booking?.checkIn, { month: 'short', year: 'numeric' })} · {r.booking?.guests} guest{r.booking?.guests > 1 ? 's' : ''}</span>
+                    </span>
+                    <Stars rating={{ avg: r.rating, count: 1 }} showCount={false} />
+                  </div>
+                  {r.comment && <p>{r.comment}</p>}
+                  <Chip tone={accuracyTone[r.checklistAccurate]} className="self-start">{accuracyText[r.checklistAccurate]}</Chip>
+                </li>
+              ))}
+            </ul>
           </Card>
         </div>
 

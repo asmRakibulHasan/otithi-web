@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { X } from 'lucide-react';
 import api from '../../api/axios.js';
 import useApi from '../../hooks/useApi.js';
@@ -8,6 +7,8 @@ import Chip from '../../components/Chip.jsx';
 import Button from '../../components/Button.jsx';
 import { Loading, ErrorBox, Empty } from '../../components/State.jsx';
 import { answer, errorMessage, taka } from '../../lib/listing.js';
+import ReportsSection from './ReportsSection.jsx';
+import LocationsSection from './LocationsSection.jsx';
 
 const initials = (name = '') => name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 const ago = (d) => {
@@ -69,9 +70,12 @@ export default function AdminDashboard() {
   const s = stats.data;
   const cards = s ? [
     { l: 'Verified hosts', v: s.verifiedHosts, n: `${s.verifiedTravellers} verified travellers` },
-    { l: 'Live rooms', v: s.liveListings, n: `${s.pendingListings} waiting for review` },
+    { l: 'Bookings completed', v: s.completedBookings, n: `${s.upcomingBookings} upcoming` },
+    { l: 'Districts covered', v: s.districts, n: `${s.villages} villages · ${s.liveListings} live rooms` },
+    { l: 'Income to families', v: taka(s.incomeToFamilies), n: 'Paid in cash, 0% commission' },
     { l: 'Pending verification', v: s.pendingUsers, n: 'Hosts and travellers' },
-    { l: 'Districts covered', v: s.districts, n: `${s.villages} villages` },
+    { l: 'Rooms to review', v: s.pendingListings, n: 'Waiting for approval' },
+    { l: 'Open reports', v: s.openReports, n: 'From guests and hosts' },
   ] : [];
 
   return (
@@ -95,7 +99,7 @@ export default function AdminDashboard() {
       <ErrorBox message={actionError} />
 
       {/* Verify users */}
-      <section className="flex flex-col gap-4">
+      <section id="verify-users" className="flex scroll-mt-6 flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-2xl font-bold">Verify users</h2>
           <div className="flex rounded-xl bg-[#EEE8DC] p-1" role="group" aria-label="Filter users">
@@ -151,7 +155,7 @@ export default function AdminDashboard() {
       </section>
 
       {/* Approve listings */}
-      <section className="flex flex-col gap-4">
+      <section id="rooms" className="flex scroll-mt-6 flex-col gap-4">
         <h2 className="text-2xl font-bold">Rooms awaiting approval</h2>
         <ErrorBox message={listings.error} />
         {listings.loading && <Loading />}
@@ -179,8 +183,10 @@ export default function AdminDashboard() {
             </Card>
           ))}
         </div>
-        <p className="text-sm text-muted">Locations and reports are managed here from Phase 5. <Link to="/browse">See the live site →</Link></p>
       </section>
+
+      <ReportsSection onChange={stats.reload} />
+      <LocationsSection onChange={stats.reload} />
 
       {viewing && <IdViewer user={viewing} onClose={() => setViewing(null)} />}
     </div>

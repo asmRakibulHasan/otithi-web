@@ -8,6 +8,7 @@ import Card from '../../components/Card.jsx';
 import Chip from '../../components/Chip.jsx';
 import Button from '../../components/Button.jsx';
 import Photo from '../../components/Photo.jsx';
+import ReviewForm from '../../components/ReviewForm.jsx';
 import { Loading, ErrorBox, Empty } from '../../components/State.jsx';
 import { taka, errorMessage } from '../../lib/listing.js';
 import { fmtRange, STATUS, isPast } from '../../lib/booking.js';
@@ -35,6 +36,7 @@ export default function TravellerDashboard() {
   const { data: bookings, loading, error, reload } = useApi('/bookings/mine');
   const [tab, setTab] = useState('upcoming');
   const [actionError, setActionError] = useState('');
+  const [reviewing, setReviewing] = useState(null); // booking id
   const saved = useSavedRooms();
 
   const cancel = async (id) => {
@@ -98,7 +100,17 @@ export default function TravellerDashboard() {
                   {['requested', 'accepted'].includes(b.status) && !isPast(b.checkIn) && (
                     <Button variant="danger" onClick={() => cancel(b._id)}>Cancel</Button>
                   )}
+                  {b.status === 'completed' && !b.reviewedByMe && reviewing !== b._id && (
+                    <Button variant="accent" onClick={() => setReviewing(b._id)}>Write a review</Button>
+                  )}
+                  {b.status === 'completed' && b.reviewedByMe && <Chip tone="good">Reviewed</Chip>}
                 </div>
+                {reviewing === b._id && (
+                  <div className="mt-3 border-t border-line pt-4">
+                    <p className="mb-3 font-semibold">How was {l?.village?.name} with {b.host?.name}?</p>
+                    <ReviewForm bookingId={b._id} asGuest onCancel={() => setReviewing(null)} onDone={() => { setReviewing(null); reload(); }} />
+                  </div>
+                )}
               </div>
               {tab === 'upcoming' && (
                 <div className="stitch flex w-full flex-col items-center justify-center gap-1 bg-[#FFFDF7] p-6 text-center sm:w-56">

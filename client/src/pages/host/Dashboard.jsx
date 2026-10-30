@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, ShieldCheck } from 'lucide-react';
+import { Plus, ShieldCheck, Flag } from 'lucide-react';
 import api from '../../api/axios.js';
 import useApi from '../../hooks/useApi.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -9,6 +9,9 @@ import Chip from '../../components/Chip.jsx';
 import Button from '../../components/Button.jsx';
 import Photo from '../../components/Photo.jsx';
 import HostCalendar from '../../components/HostCalendar.jsx';
+import Stars from '../../components/Stars.jsx';
+import ReviewForm from '../../components/ReviewForm.jsx';
+import ReportDialog from '../../components/ReportDialog.jsx';
 import { Loading, ErrorBox, Empty } from '../../components/State.jsx';
 import { taka, errorMessage } from '../../lib/listing.js';
 import { fmtDay, fmtRange, dayKey } from '../../lib/booking.js';
@@ -57,6 +60,8 @@ export default function HostDashboard() {
   const rooms = useApi('/listings/mine');
   const bookings = useApi('/bookings/host');
   const [actionError, setActionError] = useState('');
+  const [reviewing, setReviewing] = useState(null); // booking id
+  const [reporting, setReporting] = useState(null); // booking
 
   const all = bookings.data || [];
   const requests = all.filter((b) => b.status === 'requested');
@@ -125,10 +130,18 @@ export default function HostDashboard() {
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
-                  <span className="text-sm">
-                    <strong>Guest history:</strong>{' '}
-                    {b.guestHistory.stays ? `${b.guestHistory.stays} completed stay${b.guestHistory.stays > 1 ? 's' : ''} with ${b.guestHistory.hosts} host${b.guestHistory.hosts > 1 ? 's' : ''}` : 'First stay on Otithi'}
-                  </span>
+                  <div className="flex flex-col gap-1 text-sm">
+                    <span>
+                      <strong>Guest history:</strong>{' '}
+                      {b.guestHistory.stays ? `${b.guestHistory.stays} completed stay${b.guestHistory.stays > 1 ? 's' : ''} with ${b.guestHistory.hosts} host${b.guestHistory.hosts > 1 ? 's' : ''}` : 'First stay on Otithi'}
+                    </span>
+                    {b.guestHistory.reviews.count > 0 && (
+                      <span className="flex flex-wrap items-center gap-2">
+                        <Stars rating={b.guestHistory.reviews} /><span className="text-muted">from hosts</span>
+                        {b.guestHistory.reviews.latest && <span className="italic text-muted">“{b.guestHistory.reviews.latest}”</span>}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex gap-2">
                     <Button onClick={() => act(b._id, 'accept')}>Accept</Button>
                     <Button variant="danger" onClick={() => act(b._id, 'decline')}>Decline</Button>
@@ -162,19 +175,36 @@ export default function HostDashboard() {
             <h2 className="text-2xl font-bold">Booking history</h2>
             {completed.length === 0 ? <p className="text-muted">Completed stays appear here.</p> : (
               <Card className="overflow-x-auto">
-                <table className="w-full min-w-[560px] text-left text-[15px]">
+                <table className="w-full min-w-[720px] text-left text-[15px]">
                   <thead className="border-b border-line text-sm text-muted">
-                    <tr><th className="p-4 font-semibold">Guest</th><th className="p-4 font-semibold">Room</th><th className="p-4 font-semibold">Dates</th><th className="p-4 font-semibold">Nights</th><th className="p-4 text-right font-semibold">Cash</th></tr>
+                    <tr><th className="p-4 font-semibold">Guest</th><th className="p-4 font-semibold">Room</th><th className="p-4 font-semibold">Dates</th><th className="p-4 font-semibold">Nights</th><th className="p-4 text-right font-semibold">Cash</th><th className="p-4 font-semibold"><span className="sr-only">Actions</span></th></tr>
                   </thead>
                   <tbody>
                     {completed.map((b) => (
-                      <tr key={b._id} className="border-b border-line last:border-0">
-                        <td className="p-4 font-semibold">{b.guest?.name}</td>
-                        <td className="p-4">{b.listing?.title}</td>
-                        <td className="p-4 text-muted">{fmtRange(b.checkIn, b.checkOut)}</td>
-                        <td className="p-4">{b.nights}</td>
-                        <td className="p-4 text-right">{taka(b.totalPrice)}</td>
-                      </tr>
+                      <Fragment key={b._id}>
+                        <tr className="border-b border-line last:border-0">
+                          <td className="p-4 font-semibold">{b.guest?.name}</td>
+                          <td className="p-4">{b.listing?.title}</td>
+                          <td className="p-4 text-muted">{fmtRange(b.checkIn, b.checkOut)}</td>
+                          <td className="p-4">{b.nights}</td>
+                          <td className="p-4 text-right">{taka(b.totalPrice)}</td>
+                          <td className="p-4">
+                            <div className="flex justify-end gap-1">
+                              {b.reviewedByMe
+                                ? <Chip tone="good">Reviewed</Chip>
+                                : <Button variant="outline" onClick={() => setReviewing(reviewing === b._id ? null : b._id)}>Review guest</Button>}
+                              <Button variant="ghost" onClick={() => setReporting(b)} aria-label={`Report ${b.guest?.name}`}><Flag size={18} aria-hidden="true" /></Button>
+                            </div>
+                          </td>
+                        </tr>
+                        {reviewing === b._id && (
+                          <tr className="border-b border-line">
+                            <td colSpan={6} className="bg-ground p-5">
+                              <ReviewForm bookingId={b._id} onCancel={() => setReviewing(null)} onDone={() => { setReviewing(null); bookings.reload(); }} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -182,6 +212,8 @@ export default function HostDashboard() {
             )}
           </section>
         </div>
+
+        {reporting && <ReportDialog booking={reporting._id} against={`${reporting.guest?.name} (guest)`} onClose={() => setReporting(null)} />}
 
         <aside className="flex w-full flex-col gap-6 lg:w-[380px] lg:flex-none">
           {rooms.data?.length > 0 && <HostCalendar rooms={rooms.data} bookings={all} onChange={rooms.reload} />}

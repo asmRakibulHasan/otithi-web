@@ -8,6 +8,7 @@ import Card from '../components/Card.jsx';
 import Chip from '../components/Chip.jsx';
 import Button from '../components/Button.jsx';
 import Photo from '../components/Photo.jsx';
+import Stars from '../components/Stars.jsx';
 import { Loading, ErrorBox, Empty } from '../components/State.jsx';
 import { answer, taka, errorMessage } from '../lib/listing.js';
 import { nightsBetween, todayInput } from '../lib/booking.js';
@@ -135,6 +136,7 @@ export default function Village() {
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <span><strong className="font-display text-xl text-paddy">{taka(l.pricePerNight)}</strong><span className="text-sm text-muted"> / night</span></span>
+                  <Stars rating={l.rating} />
                   <Button variant="outline" to={`/listing/${l._id}`}>View house</Button>
                 </div>
               </Card>

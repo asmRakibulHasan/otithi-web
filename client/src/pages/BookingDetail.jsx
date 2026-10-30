@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Check, Copy, Lock, MapPin, Phone, Landmark } from 'lucide-react';
+import { Check, Copy, Lock, MapPin, Phone, Landmark, Flag } from 'lucide-react';
 import api from '../api/axios.js';
 import useApi from '../hooks/useApi.js';
 import Card from '../components/Card.jsx';
 import Chip from '../components/Chip.jsx';
 import Button from '../components/Button.jsx';
+import ReviewForm from '../components/ReviewForm.jsx';
+import ReportDialog from '../components/ReportDialog.jsx';
 import { Loading, ErrorBox } from '../components/State.jsx';
 import { taka, errorMessage } from '../lib/listing.js';
 import { fmtDay, STATUS, isPast } from '../lib/booking.js';
@@ -18,6 +20,7 @@ export default function BookingDetail() {
   const { data: b, loading, error, reload } = useApi(`/bookings/${id}`);
   const [copied, setCopied] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [reporting, setReporting] = useState(false);
 
   if (loading) return <Loading />;
   if (error) return <div className="wrap py-10"><ErrorBox message={error} /></div>;
@@ -48,7 +51,7 @@ export default function BookingDetail() {
     { t: 'Request sent', d: when(b.createdAt), done: true },
     { t: 'Accepted by host · code issued', d: when(b.acceptedAt), done: Boolean(b.acceptedAt) },
     { t: 'Stay & pay cash', d: b.completedAt ? when(b.completedAt) : 'Host marks the stay completed', done: b.status === 'completed' },
-    { t: 'Review each other', d: 'Was the checklist accurate?', done: false },
+    { t: 'Review each other', d: b.reviewedByMe ? 'You reviewed this stay' : 'Was the checklist accurate?', done: Boolean(b.reviewedByMe) },
   ];
 
   const canCancel = ['requested', 'accepted'].includes(b.status) && !isPast(b.checkIn);
@@ -100,6 +103,13 @@ export default function BookingDetail() {
             </Card>
           )}
 
+          {b.status === 'completed' && !b.reviewedByMe && (
+            <Card stitch className="flex flex-col gap-3 p-6">
+              <h2 className="text-xl font-bold">How was your stay?</h2>
+              <ReviewForm bookingId={b._id} asGuest onDone={reload} />
+            </Card>
+          )}
+
           <Card className="flex flex-col gap-3 p-6">
             <h2 className="text-xl font-bold">Directions &amp; host contact</h2>
             {b.unlocked ? (
@@ -135,6 +145,10 @@ export default function BookingDetail() {
           </Card>
           <Button variant="outline" to={`/listing/${l._id}`}>View the room</Button>
           {canCancel && <Button variant="danger" onClick={cancel}>Cancel {b.status === 'requested' ? 'request' : 'booking'}</Button>}
+          {['accepted', 'completed'].includes(b.status) && (
+            <Button variant="ghost" onClick={() => setReporting(true)}><Flag size={18} aria-hidden="true" />Report a problem</Button>
+          )}
+          {reporting && <ReportDialog booking={b._id} against={`${b.host?.name} (host)`} onClose={() => setReporting(false)} />}
         </aside>
       </div>
     </div>

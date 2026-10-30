@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import District from '../models/District.js';
 import Village from '../models/Village.js';
 import Listing from '../models/Listing.js';
+import { listingRatings } from './reviewController.js';
 
 // Households, rooms, capacity and starting price per village, from approved listings.
 async function villageStats(match = {}) {
@@ -61,5 +62,10 @@ export async function getVillage(req, res) {
     villageStats({ village: village._id }),
   ]);
 
-  res.json({ ...village, stats: stats[String(village._id)] || emptyStats, listings });
+  const ratings = await listingRatings(listings.map((l) => l._id));
+  res.json({
+    ...village,
+    stats: stats[String(village._id)] || emptyStats,
+    listings: listings.map((l) => ({ ...l, rating: ratings[String(l._id)] || null })),
+  });
 }

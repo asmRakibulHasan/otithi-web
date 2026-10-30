@@ -201,11 +201,13 @@ otithi/
 - [x] Seed: 8 demo bookings (one checks in today: code `OT-5RT8` at Rahima's)
 
 ### Phase 5 — Reviews, reports, admin (Day 13–16)
-- [ ] Review model: guest → host (with "checklist accurate?") and host → guest
-- [ ] Show reviews and "% say the checklist was accurate" on the listing
-- [ ] Report button (listing / booking) → admin reports list → resolve
-- [ ] Admin: location management + stats cards
-- [ ] Host dashboard stats (nights hosted, total earned in cash)
+- [x] Review model: guest → host (with "checklist accurate?") and host → guest; one per side per completed stay
+- [x] Show reviews, star rating and "% say the checklist was accurate" on the listing; stars on room/village cards
+- [x] Hosts see each guest's average rating and latest host comment on new requests
+- [x] Report button (room page / booking page / host history) → admin reports list → resolve
+- [x] Admin: districts & villages (add, remove when empty) + stats cards (bookings, income, open reports)
+- [x] Host dashboard stats (nights hosted, total earned in cash) — done in Phase 4
+- [x] Seed: 5 reviews, 2 open reports
 
 ### Phase 6 — Polish & demo (Day 17–20)
 - [ ] Responsive check at phone width

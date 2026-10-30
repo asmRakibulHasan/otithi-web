@@ -2,6 +2,8 @@ import crypto from 'crypto';
 import mongoose from 'mongoose';
 import Booking from '../models/Booking.js';
 import Listing from '../models/Listing.js';
+import Review from '../models/Review.js';
+import { guestRatings } from './reviewController.js';
 
 const DAY = 86400000;
 const MAX_NIGHTS = 30;
@@ -101,13 +103,20 @@ export async function createBooking(req, res) {
   res.status(201).json(booking);
 }
 
+// Set of booking ids this user has already reviewed
+async function reviewedIds(userId, bookingIds) {
+  const ids = await Review.find({ author: userId, booking: { $in: bookingIds } }).distinct('booking');
+  return new Set(ids.map(String));
+}
+
 // GET /api/bookings/mine — the traveller's bookings
 export async function myBookings(req, res) {
   const bookings = await Booking.find({ guest: req.user._id })
     .populate({ path: 'listing', select: `${listingFields} directions`, populate: villagePopulate })
     .populate('host', 'name phone')
     .sort('-checkIn');
-  res.json(bookings.map(withPrivateDetails));
+  const reviewed = await reviewedIds(req.user._id, bookings.map((b) => b._id));
+  res.json(bookings.map((b) => ({ ...withPrivateDetails(b), reviewedByMe: reviewed.has(String(b._id)) })));
 }
 
 // GET /api/bookings/:id — one booking, for its guest or host
@@ -118,7 +127,8 @@ export async function getBooking(req, res) {
     .populate('host', 'name phone')
     .populate('guest', 'name');
   if (!booking) return res.status(404).json({ message: 'Booking not found' });
-  res.json(withPrivateDetails(booking));
+  const reviewed = await reviewedIds(req.user._id, [booking._id]);
+  res.json({ ...withPrivateDetails(booking), reviewedByMe: reviewed.has(String(booking._id)) });
 }
 
 // GET /api/bookings/host — all bookings for the host's rooms, with each guest's history
@@ -129,18 +139,25 @@ export async function hostBookings(req, res) {
     .sort('checkIn')
     .lean();
 
-  // Past completed stays of each guest across all hosts (reviews are added in Phase 5)
+  // Past completed stays of each guest across all hosts, plus what hosts said about them
   const guestIds = [...new Set(bookings.map((b) => String(b.guest?._id)))].map((id) => new mongoose.Types.ObjectId(id));
   const history = await Booking.aggregate([
     { $match: { guest: { $in: guestIds }, status: 'completed' } },
     { $group: { _id: '$guest', stays: { $sum: 1 }, hosts: { $addToSet: '$host' } } },
   ]);
   const byGuest = Object.fromEntries(history.map((h) => [String(h._id), { stays: h.stays, hosts: h.hosts.length }]));
+  const [ratings, reviewed] = await Promise.all([guestRatings(guestIds), reviewedIds(req.user._id, bookings.map((b) => b._id))]);
 
   res.json(bookings.map((b) => {
     const unlocked = ['accepted', 'completed'].includes(b.status);
     const guest = b.guest && { ...b.guest, phone: unlocked ? b.guest.phone : undefined };
-    return { ...b, guest, guestHistory: byGuest[String(b.guest?._id)] || { stays: 0, hosts: 0 } };
+    const gid = String(b.guest?._id);
+    return {
+      ...b,
+      guest,
+      guestHistory: { stays: 0, hosts: 0, ...byGuest[gid], reviews: ratings[gid] || { avg: null, count: 0, latest: null } },
+      reviewedByMe: reviewed.has(String(b._id)),
+    };
   }));
 }
 

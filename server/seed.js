@@ -1,4 +1,4 @@
-// Demo data for local development. WARNING: wipes users, districts, villages, listings and bookings.
+// Demo data for local development. WARNING: wipes all users, locations, rooms, bookings, reviews and reports.
 // Run: npm run seed
 import 'dotenv/config';
 import mongoose from 'mongoose';
@@ -8,6 +8,8 @@ import District from './models/District.js';
 import Village from './models/Village.js';
 import Listing from './models/Listing.js';
 import Booking from './models/Booking.js';
+import Review from './models/Review.js';
+import Report from './models/Report.js';
 
 const districts = {
   Sylhet: [
@@ -124,7 +126,8 @@ const listings = [
 async function seed() {
   await connectDB();
 
-  await Promise.all([User.deleteMany(), District.deleteMany(), Village.deleteMany(), Listing.deleteMany(), Booking.deleteMany()]);
+  await Promise.all([User.deleteMany(), District.deleteMany(), Village.deleteMany(), Listing.deleteMany(), Booking.deleteMany(),
+    Review.deleteMany(), Report.deleteMany()]);
 
   const villageByName = {};
   for (const [districtName, villages] of Object.entries(districts)) {
@@ -169,17 +172,39 @@ async function seed() {
   await book(tania, 'rahima', 14, 2, 2, 'accepted', { code: 'OT-7K2Q', acceptedAt: day(-1),
     message: 'Assalamu alaikum! Two of us (me and my sister) are visiting Jaflong. We will arrive by CNG around 3 pm.' });
   await book(tania, 'kashem', 30, 2, 3, 'requested', { message: 'Three friends, first time on the haor.' });
-  await book(tania, 'lalthang', -14, 2, 2, 'completed', { code: 'OT-4M8C', acceptedAt: day(-30), completedAt: day(-12) });
+  const t1 = await book(tania, 'lalthang', -14, 2, 2, 'completed', { code: 'OT-4M8C', acceptedAt: day(-30), completedAt: day(-12) });
   await book(tania, 'shefali', 40, 1, 1, 'cancelled', { cancelledAt: day(-3) });
   await book(sadia, 'rahima', 0, 1, 2, 'accepted', { code: 'OT-5RT8', acceptedAt: day(-5) });
   await book(sadia, 'rahima', 21, 2, 2, 'requested', { message: 'Coming with my mother. We are vegetarian — is that okay?' });
-  await book(sadia, 'rahima', -40, 3, 2, 'completed', { code: 'OT-2Z6P', acceptedAt: day(-50), completedAt: day(-37) });
-  await book(sadia, 'mong', -60, 2, 1, 'completed', { code: 'OT-9H3D', acceptedAt: day(-70), completedAt: day(-58) });
+  const s1 = await book(sadia, 'rahima', -40, 3, 2, 'completed', { code: 'OT-2Z6P', acceptedAt: day(-50), completedAt: day(-37) });
+  const s2 = await book(sadia, 'mong', -60, 2, 1, 'completed', { code: 'OT-9H3D', acceptedAt: day(-70), completedAt: day(-58) });
+
+  // Two-way reviews for the completed stays (t1 is left without a guest review so Tania can write one)
+  const review = (b, type, rating, comment, checklistAccurate) => Review.create({
+    booking: b._id, listing: b.listing, type, rating, comment,
+    author: type === 'guest_to_host' ? b.guest : b.host,
+    target: type === 'guest_to_host' ? b.host : b.guest,
+    ...(checklistAccurate && { checklistAccurate }),
+  });
+  await review(s1, 'guest_to_host', 5, 'I knew the toilet was outside before I came, so no surprises. Rahima apa made the best khichuri and walked us to the zero point.', 'yes');
+  await review(s1, 'host_to_guest', 5, 'Polite guests, kept the room clean and came back before 10 pm.');
+  await review(s2, 'guest_to_host', 4, 'Clouds below the window as promised. Solar power was a bit weaker than listed in the evening.', 'mostly');
+  await review(s2, 'host_to_guest', 5, 'A respectful solo traveller. Welcome back any time.');
+  await review(t1, 'host_to_guest', 5, 'Tania and her sister were lovely guests.');
+
+  await Report.create({
+    reporter: sadia._id, against: s2.host, booking: s2._id, listing: s2.listing, type: 'guest_to_host',
+    title: 'Solar power ran out by 9 pm', details: 'The listing says solar only, which is fine, but there was no power for charging after 9 pm on both nights.',
+  });
+  await Report.create({
+    reporter: tania._id, against: roomByHost.kashem.host, listing: roomByHost.kashem._id, type: 'guest_to_host',
+    title: 'No photos on the listing', details: 'This room has no photos yet. Hard to know what to expect.',
+  });
 
   roomByHost.rahima.blockedDates = [day(17), day(18)];
   await roomByHost.rahima.save();
 
-  console.log(`Seeded ${Object.keys(districts).length} districts, ${Object.keys(villageByName).length} villages, ${hosts.length + 4} users, ${listings.length} rooms, 8 bookings`);
+  console.log(`Seeded ${Object.keys(districts).length} districts, ${Object.keys(villageByName).length} villages, ${hosts.length + 4} users, ${listings.length} rooms, 8 bookings, 5 reviews, 2 reports`);
   console.log('Admin:     admin@otithi.local / admin123');
   console.log('Traveller: tania@otithi.local / password123');
   console.log('Host:      rahima@otithi.local / password123');

@@ -7,6 +7,7 @@ import Chip from '../components/Chip.jsx';
 import Button from '../components/Button.jsx';
 import Photo from '../components/Photo.jsx';
 import RoomCard from '../components/RoomCard.jsx';
+import Stars from '../components/Stars.jsx';
 import { Loading, ErrorBox, Empty } from '../components/State.jsx';
 import { CHECKLIST, SAFETY, taka } from '../lib/listing.js';
 
@@ -26,6 +27,9 @@ function groupByVillage(listings, guests) {
   }
   return [...map.values()].map((g) => {
     const capacity = g.rooms.reduce((s, r) => s + r.capacity, 0);
+    const rated = g.rooms.filter((r) => r.rating?.count);
+    const count = rated.reduce((s, r) => s + r.rating.count, 0);
+    const rating = count ? { count, avg: rated.reduce((s, r) => s + r.rating.avg * r.rating.count, 0) / count } : null;
     const attached = g.rooms.filter((r) => r.checklist.toilet === 'attached').length;
     const chips = [];
     if (attached) chips.push({ tone: 'good', text: `Attached toilet in ${attached} home${attached > 1 ? 's' : ''}` });
@@ -37,6 +41,7 @@ function groupByVillage(listings, guests) {
       households: g.hosts.size,
       roomCount: g.rooms.reduce((s, r) => s + (r.rooms || 1), 0),
       capacity,
+      rating,
       minPrice: Math.min(...g.rooms.map((r) => r.pricePerNight)),
       chips: chips.slice(0, 3),
       fit: guests ? (capacity >= guests ? `Fits your group of ${guests}` : `Only ${capacity} beds for your group of ${guests}`) : null,
@@ -219,6 +224,7 @@ export default function Browse() {
                   <span className="flex items-center gap-1.5"><HomeIcon size={18} aria-hidden="true" /><strong>{g.households}</strong> household{g.households > 1 ? 's' : ''}</span>
                   <span className="flex items-center gap-1.5"><BedDouble size={18} aria-hidden="true" /><strong>{g.roomCount}</strong> rooms</span>
                   <span className="flex items-center gap-1.5"><Users size={18} aria-hidden="true" />up to <strong>{g.capacity}</strong> guests</span>
+                  <Stars rating={g.rating} />
                 </div>
                 <div className="flex flex-wrap gap-2">{g.chips.map((c) => <Chip key={c.text} tone={c.tone}>{c.text}</Chip>)}</div>
                 <div className="mt-auto flex flex-wrap items-center justify-between gap-2.5">
