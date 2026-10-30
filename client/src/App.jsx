@@ -1,23 +1,43 @@
 import { Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout.jsx';
+import ProtectedRoute from './components/ProtectedRoute.jsx';
 import Home from './pages/Home.jsx';
+import Auth from './pages/Auth.jsx';
 import ComingSoon from './pages/ComingSoon.jsx';
+import Browse from './pages/Browse.jsx';
+import Village from './pages/Village.jsx';
+import Listing from './pages/Listing.jsx';
+import HostDashboard from './pages/host/Dashboard.jsx';
+import AddRoom from './pages/host/AddRoom.jsx';
+import AdminDashboard from './pages/admin/Dashboard.jsx';
 
 export default function App() {
   return (
     <Routes>
+      {/* Full-screen auth page, no navbar (06 · Login, signup & verification) */}
+      <Route path="/login" element={<Auth mode="login" />} />
+      <Route path="/register" element={<Auth mode="register" />} />
+
       <Route element={<Layout />}>
         <Route path="/" element={<Home />} />
-        <Route path="/login" element={<ComingSoon title="Log in" phase={2} />} />
-        <Route path="/register" element={<ComingSoon title="Sign up" phase={2} />} />
-        <Route path="/browse" element={<ComingSoon title="Browse stays" phase={3} />} />
-        <Route path="/village/:id" element={<ComingSoon title="Village" phase={3} />} />
-        <Route path="/listing/:id" element={<ComingSoon title="Room listing" phase={3} />} />
-        <Route path="/booking/:id" element={<ComingSoon title="Booking" phase={4} />} />
-        <Route path="/traveller" element={<ComingSoon title="My bookings" phase={4} />} />
-        <Route path="/host" element={<ComingSoon title="Host dashboard" phase={4} />} />
-        <Route path="/host/add-room" element={<ComingSoon title="Add a room" phase={3} />} />
-        <Route path="/admin" element={<ComingSoon title="Admin panel" phase={3} />} />
+        <Route path="/browse" element={<Browse />} />
+        <Route path="/village/:id" element={<Village />} />
+        <Route path="/listing/:id" element={<Listing />} />
+
+        <Route element={<ProtectedRoute roles={['traveller']} />}>
+          <Route path="/booking/:id" element={<ComingSoon title="Booking" phase={4} />} />
+          <Route path="/traveller" element={<ComingSoon title="My bookings" phase={4} />} />
+        </Route>
+
+        <Route element={<ProtectedRoute roles={['host']} />}>
+          <Route path="/host" element={<HostDashboard />} />
+          <Route path="/host/add-room" element={<AddRoom />} />
+        </Route>
+
+        <Route element={<ProtectedRoute roles={['admin']} />}>
+          <Route path="/admin" element={<AdminDashboard />} />
+        </Route>
+
         <Route path="*" element={<ComingSoon title="Page not found" phase="—" />} />
       </Route>
     </Routes>

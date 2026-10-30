@@ -178,17 +178,19 @@ otithi/
 - [x] Root `npm run dev` starts API + web together (concurrently)
 
 ### Phase 2 — Auth & verification (Day 3–4)
-- [ ] User model, register with ID upload, login, JWT middleware, role middleware
-- [ ] Auth page (role choice, form, upload, "verification pending" banner)
-- [ ] AuthContext + ProtectedRoute
-- [ ] `seed.js`: admin account, 4 districts, ~8 villages, a few hosts and listings
+- [x] User model, register with ID upload, login, JWT middleware, role middleware
+  - ID photos go to `server/private/ids/` (not public); room photos will go to `server/uploads/`
+- [x] Auth page (role choice, form, upload, "verification pending" banner)
+- [x] AuthContext + ProtectedRoute (traveller / host / admin areas)
+- [x] `seed.js`: admin account, 4 districts, 9 villages, travellers and hosts (listings added in Phase 3)
 
 ### Phase 3 — Listings (Day 5–8)
-- [ ] District, Village and Listing models + routes
-- [ ] Host add-room wizard (4 steps, multer photos, checklist, safety, directions)
-- [ ] Admin: approve users + approve listings
-- [ ] Browse page with filters (query params → Mongo query)
-- [ ] Village page + Listing detail page
+- [x] District, Village and Listing models + routes (search filters, village stats, owner edit → back to pending)
+- [x] Host add-room wizard (4 steps, multer photos, checklist, safety, directions) + basic "My rooms" on host dashboard
+- [x] Admin: stats, approve/reject users (view private ID photo), publish/reject listings
+- [x] Browse page with filters in the URL, by-village / by-room views, mobile filter toggle
+- [x] Village page (households + group planner UI) + Listing detail page (checklist, safety, landmark, rules, save)
+- [x] Home: search box + featured villages; seed has 9 hosts and 9 rooms (1 pending)
 
 ### Phase 4 — Booking flow (Day 9–12)
 - [ ] Booking model + request route (check verified user, dates not blocked or overlapping)
