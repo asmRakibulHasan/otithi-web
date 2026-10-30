@@ -21,6 +21,14 @@ const readSaved = () => {
   try { return JSON.parse(localStorage.getItem(SAVED_KEY)) || []; } catch { return []; }
 };
 
+// Grid spans for the right half of the gallery, by how many side photos there are
+const tileSpan = (count, i) => {
+  if (count === 1) return 'md:col-span-2 md:row-span-2';
+  if (count === 2) return 'md:col-span-2';
+  if (count === 3 && i === 0) return 'md:col-span-2';
+  return '';
+};
+
 const initials = (name = '') => name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
 // 04 · Room listing
@@ -90,12 +98,19 @@ export default function Listing() {
       {reporting && <ReportDialog listing={id} against={`${l.host?.name}'s room`} onClose={() => setReporting(false)} />}
 
       {/* Gallery */}
-      <div className="grid h-72 gap-3 overflow-hidden rounded-card md:h-[420px] md:grid-cols-4 md:grid-rows-2">
-        <div className="md:col-span-2 md:row-span-2"><Photo src={photos[0]} alt={l.title} label={photos[0] ? null : 'No photo yet'} /></div>
-        {photos.slice(1, 5).map((p, i) => (
-          <div key={p} className="hidden md:block"><Photo src={p} alt={`${l.title} photo ${i + 2}`} /></div>
-        ))}
-      </div>
+      {photos.length < 2 ? (
+        <div className="h-72 overflow-hidden rounded-card md:h-[420px]">
+          <Photo src={photos[0]} alt={l.title} label={photos[0] ? null : 'No photo yet'} />
+        </div>
+      ) : (
+        // Main photo on the left half; the next 1–4 photos fill the right half
+        <div className="grid h-72 gap-3 overflow-hidden rounded-card md:h-[420px] md:grid-cols-4 md:grid-rows-2">
+          <div className="md:col-span-2 md:row-span-2"><Photo src={photos[0]} alt={l.title} /></div>
+          {photos.slice(1, 5).map((p, i, rest) => (
+            <div key={p} className={`hidden md:block ${tileSpan(rest.length, i)}`}><Photo src={p} alt={`${l.title} photo ${i + 2}`} /></div>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-start gap-8">
         <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-6">

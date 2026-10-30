@@ -18,7 +18,8 @@ const dayStyle = {
 
 // Month view of one room. Tap a free day to block it, tap a blocked day to free it.
 export default function HostCalendar({ rooms, bookings, onChange }) {
-  const [roomId, setRoomId] = useState(rooms[0]?._id || '');
+  // Start on a live room if there is one
+  const [roomId, setRoomId] = useState((rooms.find((r) => r.status === 'approved') || rooms[0])?._id || '');
   const [month, setMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
   const [blocked, setBlocked] = useState([]);
   const [error, setError] = useState('');

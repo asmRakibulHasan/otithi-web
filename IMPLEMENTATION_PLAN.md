@@ -9,7 +9,7 @@ A homestay platform for remote-area tourism in Bangladesh. Student project (NUB 
 | Layer | Choice | Notes |
 |---|---|---|
 | Frontend | React 18 + Vite + Tailwind CSS + React Router | `lucide-react` for icons, `axios` for API calls |
-| Backend | Node.js + Express | REST API on `http://localhost:5000` |
+| Backend | Node.js + Express | REST API on `http://localhost:5050` |
 | Database | **MongoDB Community Server (local)** + Mongoose | `mongodb://127.0.0.1:27017/otithi`, view with MongoDB Compass |
 | Auth | JWT + bcryptjs | Token kept in `localStorage` |
 | File uploads | multer | Saved to `server/uploads/`, served as static files |
@@ -170,7 +170,7 @@ otithi/
 
 ### Phase 1 — Setup (Day 1–2)
 - [x] Node.js installed (v22)
-- [ ] Install MongoDB Community Server (+ Compass): `brew trust mongodb/brew && brew install mongodb-community mongosh && brew services start mongodb-community`
+- [ ] Install MongoDB Community Server (+ Compass): `brew tap mongodb/brew && brew trust mongodb/brew && brew install mongodb-community mongosh && brew services start mongodb-community` — **still to do on the dev machine**
 - [x] React + Vite + Tailwind 3 client, Style Guide colours in `tailwind.config.js`, fonts bundled via `@fontsource` (offline)
 - [x] `server`: express, mongoose, bcryptjs, jsonwebtoken, multer, cors, dotenv, nodemon
 - [x] Local MongoDB connection (`config/db.js`) + `GET /api/health`
@@ -210,11 +210,13 @@ otithi/
 - [x] Seed: 5 reviews, 2 open reports
 
 ### Phase 6 — Polish & demo (Day 17–20)
-- [ ] Responsive check at phone width
-- [ ] Empty states, loading states, form validation messages
-- [ ] Fill the seed data with realistic Sylhet / Bandarban / Sunamganj / Rangamati examples
-- [ ] Test the full flow: register host → admin approves → add room → admin publishes → traveller requests → host accepts → code → complete → both review
-- [ ] Write the README (how to run) and take screenshots for the report
+- [x] Responsive check at phone width (390 px) on all 11 pages: no sideways scrolling, no console errors
+- [x] Fixes: Home "How it works" / "Safety" sections (navbar links), invisible group card, plurals, photo gallery layout, host table overflow on phones, footer, calendar default room, scroll to top on page change
+- [x] Bangladesh time (UTC+6) for "today" in booking rules (check-in, cancel, mark completed)
+- [x] API moved to port 5050 (macOS AirPlay uses 5000)
+- [x] Seed data: realistic dates and phone numbers
+- [x] Full flow tested in a real browser: register host → admin approves → add room → admin publishes → traveller requests → host accepts → code → complete → both review → report → resolve
+- [x] README (how to run, demo accounts, demo script) and screenshots in `docs/screenshots/`
 
 ---
 
@@ -229,7 +231,7 @@ npm run install:all                 # root + server + client
 cp server/.env.example server/.env  # PORT, MONGO_URI, JWT_SECRET
 
 # 3. Every time (from the project root)
-npm run dev        # API on http://localhost:5000, website on http://localhost:5173
+npm run dev        # API on http://localhost:5050, website on http://localhost:5173
 
 # From Phase 2:
 npm --prefix server run seed        # demo data + admin@otithi.local / admin123

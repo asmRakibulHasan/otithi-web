@@ -113,7 +113,7 @@ export default function AdminDashboard() {
         {users.loading && <Loading />}
         {users.data?.length === 0 && <Empty title="Nobody here">No {userFilter === 'all' ? '' : userFilter} users.</Empty>}
         {users.data?.length > 0 && (
-          <Card className="overflow-x-auto">
+          <Card className="relative overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-[15px]">
               <thead className="border-b border-line text-sm text-muted">
                 <tr><th className="p-4 font-semibold">User</th><th className="p-4 font-semibold">Role</th><th className="p-4 font-semibold">Village</th>

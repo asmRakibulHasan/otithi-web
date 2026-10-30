@@ -68,6 +68,9 @@ export const SAFETY = [
   { key: 'childrenOk', label: 'Good for families with children' },
 ];
 
+// plural(1, 'room') → "1 room", plural(3, 'household') → "3 households"
+export const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
 export const taka = (n) => `৳${Number(n || 0).toLocaleString('en-IN')}`;
 
 export const errorMessage = (err, fallback = 'Something went wrong. Is the server running?') =>

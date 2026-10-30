@@ -9,7 +9,7 @@ import Photo from '../components/Photo.jsx';
 import RoomCard from '../components/RoomCard.jsx';
 import Stars from '../components/Stars.jsx';
 import { Loading, ErrorBox, Empty } from '../components/State.jsx';
-import { CHECKLIST, SAFETY, taka } from '../lib/listing.js';
+import { CHECKLIST, SAFETY, taka, plural } from '../lib/listing.js';
 
 const FILTER_KEYS = ['district', 'village', 'checkIn', 'checkOut', 'guests', 'minPrice', 'maxPrice',
   ...CHECKLIST.map((c) => c.key), ...SAFETY.map((s) => s.key)];
@@ -178,7 +178,7 @@ export default function Browse() {
             <div>
               <div className="text-sm text-muted"><Link to="/">Home</Link> › {districtName || 'All districts'}</div>
               <h1 className="text-3xl font-extrabold md:text-4xl">
-                {loading ? 'Searching…' : `${villages.length} village${villages.length === 1 ? '' : 's'} · ${listings?.length || 0} rooms${districtName ? ` in ${districtName}` : ''}`}
+                {loading ? 'Searching…' : `${plural(villages.length, 'village')} · ${plural(listings?.length || 0, 'room')}${districtName ? ` in ${districtName}` : ''}`}
               </h1>
             </div>
             <div className="flex flex-wrap items-center gap-2.5">
@@ -222,7 +222,7 @@ export default function Browse() {
                 </div>
                 <div className="flex flex-wrap gap-5 text-[15px]">
                   <span className="flex items-center gap-1.5"><HomeIcon size={18} aria-hidden="true" /><strong>{g.households}</strong> household{g.households > 1 ? 's' : ''}</span>
-                  <span className="flex items-center gap-1.5"><BedDouble size={18} aria-hidden="true" /><strong>{g.roomCount}</strong> rooms</span>
+                  <span className="flex items-center gap-1.5"><BedDouble size={18} aria-hidden="true" /><strong>{g.roomCount}</strong> room{g.roomCount === 1 ? '' : 's'}</span>
                   <span className="flex items-center gap-1.5"><Users size={18} aria-hidden="true" />up to <strong>{g.capacity}</strong> guests</span>
                   <Stars rating={g.rating} />
                 </div>

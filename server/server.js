@@ -46,7 +46,7 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ message: err.status ? err.message : 'Server error' });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5050;
 
 connectDB().then(() => {
   app.listen(PORT, () => console.log(`Otithi API running on http://localhost:${PORT}`));

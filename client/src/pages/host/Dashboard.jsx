@@ -14,7 +14,7 @@ import ReviewForm from '../../components/ReviewForm.jsx';
 import ReportDialog from '../../components/ReportDialog.jsx';
 import { Loading, ErrorBox, Empty } from '../../components/State.jsx';
 import { taka, errorMessage } from '../../lib/listing.js';
-import { fmtDay, fmtRange, dayKey } from '../../lib/booking.js';
+import { fmtDay, fmtRange, dayKey, todayBD } from '../../lib/booking.js';
 
 const roomTone = { approved: 'good', pending: 'warn', rejected: 'bad' };
 const roomText = { approved: 'Live', pending: 'Waiting for admin', rejected: 'Rejected' };
@@ -24,8 +24,8 @@ function CompleteStay({ booking, onDone }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  // Same rule as the server: from the check-in day (UTC)
-  const canComplete = dayKey(booking.checkIn) <= new Date().toISOString().slice(0, 10);
+  // Same rule as the server: from the check-in day (Bangladesh time)
+  const canComplete = dayKey(booking.checkIn) <= todayBD();
 
   const submit = async (e) => {
     e.preventDefault();
@@ -174,7 +174,7 @@ export default function HostDashboard() {
           <section className="flex flex-col gap-4">
             <h2 className="text-2xl font-bold">Booking history</h2>
             {completed.length === 0 ? <p className="text-muted">Completed stays appear here.</p> : (
-              <Card className="overflow-x-auto">
+              <Card className="relative overflow-x-auto">
                 <table className="w-full min-w-[720px] text-left text-[15px]">
                   <thead className="border-b border-line text-sm text-muted">
                     <tr><th className="p-4 font-semibold">Guest</th><th className="p-4 font-semibold">Room</th><th className="p-4 font-semibold">Dates</th><th className="p-4 font-semibold">Nights</th><th className="p-4 text-right font-semibold">Cash</th><th className="p-4 font-semibold"><span className="sr-only">Actions</span></th></tr>

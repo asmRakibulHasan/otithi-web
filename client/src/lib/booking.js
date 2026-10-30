@@ -27,4 +27,7 @@ export const STATUS = {
   cancelled: { label: 'Cancelled', tone: 'bad' },
 };
 
+// Today in Bangladesh (UTC+6) as "YYYY-MM-DD" — the server uses the same day for booking rules
+export const todayBD = () => new Date(Date.now() + 6 * 3600000).toISOString().slice(0, 10);
+
 export const isPast = (d) => new Date(d) < new Date(todayInput() + 'T00:00:00Z');

@@ -144,9 +144,9 @@ async function seed() {
   await User.create({ name: 'Mahmud Hasan', email: 'mahmud@otithi.local', phone: '01722222222', password: 'password123', role: 'traveller', status: 'pending' });
 
   const hostByKey = {};
-  for (const [name, key, village, status] of hosts) {
+  for (const [i, [name, key, village, status]] of hosts.entries()) {
     hostByKey[key] = await User.create({
-      name, email: `${key}@otithi.local`, phone: '01XXXXXXXXX', password: 'password123',
+      name, email: `${key}@otithi.local`, phone: `0181234560${i}`, password: 'password123',
       role: 'host', status, village: villageByName[village]._id,
     });
   }
@@ -159,14 +159,18 @@ async function seed() {
   }
 
   // Bookings, with dates relative to today so the demo always looks current
-  const today = new Date();
+  const today = new Date(Date.now() + 6 * 3600000); // today in Bangladesh (UTC+6)
   const day = (offset) => new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + offset));
-  const book = (guest, hostKey, start, nights, guests, status, extra = {}) => {
+  const book = async (guest, hostKey, start, nights, guests, status, extra = {}) => {
     const room = roomByHost[hostKey];
-    return Booking.create({
+    const booking = await Booking.create({
       listing: room._id, guest: guest._id, host: room.host, checkIn: day(start), checkOut: day(start + nights),
       nights, guests, totalPrice: nights * room.pricePerNight, status, ...extra,
     });
+    // Back-date the request so the timeline reads in order (sent → accepted → completed)
+    const sentAt = new Date((extra.acceptedAt || extra.cancelledAt || day(0)).getTime() - 20 * 3600000);
+    await Booking.collection.updateOne({ _id: booking._id }, { $set: { createdAt: sentAt } });
+    return booking;
   };
 
   await book(tania, 'rahima', 14, 2, 2, 'accepted', { code: 'OT-7K2Q', acceptedAt: day(-1),

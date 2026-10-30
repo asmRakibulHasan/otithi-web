@@ -16,9 +16,11 @@ function parseDay(value) {
   return isNaN(d) ? null : d;
 }
 
-const todayUTC = () => {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+// Otithi is Bangladesh-only, so "today" is the calendar day in Bangladesh (UTC+6)
+const BD_OFFSET = 6 * 3600000;
+const todayBD = () => {
+  const bd = new Date(Date.now() + BD_OFFSET);
+  return new Date(Date.UTC(bd.getUTCFullYear(), bd.getUTCMonth(), bd.getUTCDate()));
 };
 
 async function newCode() {
@@ -79,7 +81,7 @@ export async function createBooking(req, res) {
   if (!listing) return res.status(404).json({ message: 'Room not found' });
 
   if (!checkIn || !checkOut) return res.status(400).json({ message: 'Choose check-in and check-out dates' });
-  if (checkIn < todayUTC()) return res.status(400).json({ message: 'Check-in cannot be in the past' });
+  if (checkIn < todayBD()) return res.status(400).json({ message: 'Check-in cannot be in the past' });
   const nights = Math.round((checkOut - checkIn) / DAY);
   if (nights < 1) return res.status(400).json({ message: 'Check-out must be after check-in' });
   if (nights > MAX_NIGHTS) return res.status(400).json({ message: `You can request up to ${MAX_NIGHTS} nights` });
@@ -200,7 +202,7 @@ export async function cancelBooking(req, res) {
   const booking = await findOwned(req, res, 'guest');
   if (!booking) return;
   if (!['requested', 'accepted'].includes(booking.status)) return res.status(400).json({ message: `This booking is already ${booking.status}` });
-  if (booking.checkIn < todayUTC()) return res.status(400).json({ message: 'The stay has already started' });
+  if (booking.checkIn < todayBD()) return res.status(400).json({ message: 'The stay has already started' });
   booking.status = 'cancelled';
   booking.cancelledAt = new Date();
   await booking.save();
@@ -212,7 +214,7 @@ export async function completeBooking(req, res) {
   const booking = await findOwned(req, res, 'host');
   if (!booking) return;
   if (booking.status !== 'accepted') return res.status(400).json({ message: 'Only accepted bookings can be completed' });
-  if (booking.checkIn > todayUTC()) return res.status(400).json({ message: 'You can mark the stay completed from the check-in day' });
+  if (booking.checkIn > todayBD()) return res.status(400).json({ message: 'You can mark the stay completed from the check-in day' });
 
   // Accept "OT-7K2Q", "ot7k2q" or just "7K2Q"
   const code = 'OT-' + String(req.body.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^OT/, '');
