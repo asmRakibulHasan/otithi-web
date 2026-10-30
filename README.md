@@ -46,7 +46,7 @@ Everything runs offline on one laptop. There are no cloud services.
   brew services start mongodb-community
   ```
 
-  On Windows, use the MSI installer from mongodb.com and leave "Run as a service" ticked. MongoDB Compass is optional and lets you browse the data.
+  **On Windows, follow [WINDOWS_SETUP.md](WINDOWS_SETUP.md)** for step-by-step instructions and troubleshooting.
 
 ### 2. First time
 
