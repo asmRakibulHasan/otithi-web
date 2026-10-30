@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { searchListings, getListing, myListings, createListing, updateListing } from '../controllers/listingController.js';
+import { searchListings, getListing, myListings, createListing, updateListing, setBlockedDates } from '../controllers/listingController.js';
 import { protect, optionalAuth, requireRole, requireApproved } from '../middleware/auth.js';
 import { uploadPhoto } from '../middleware/upload.js';
 
@@ -11,5 +11,6 @@ router.get('/mine', protect, requireRole('host'), myListings);
 router.get('/:id', optionalAuth, getListing);
 router.post('/', ...hostOnly, uploadPhoto.array('photos', 10), createListing);
 router.put('/:id', ...hostOnly, uploadPhoto.array('photos', 10), updateListing);
+router.put('/:id/blocked-dates', protect, requireRole('host'), setBlockedDates);
 
 export default router;

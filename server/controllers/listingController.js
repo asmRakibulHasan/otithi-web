@@ -148,6 +148,21 @@ export async function createListing(req, res) {
   }
 }
 
+// PUT /api/listings/:id/blocked-dates { dates: ['2026-12-16', ...] } — owner marks days unavailable
+export async function setBlockedDates(req, res) {
+  const listing = await Listing.findOne({ _id: req.params.id, host: req.user._id });
+  if (!listing) return res.status(404).json({ message: 'Room not found' });
+  if (!Array.isArray(req.body.dates)) return res.status(400).json({ message: 'dates must be a list' });
+
+  const days = [...new Set(req.body.dates.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))]
+    .map((d) => new Date(`${d}T00:00:00Z`))
+    .filter((d) => !isNaN(d));
+
+  listing.blockedDates = days.sort((a, b) => a - b);
+  await listing.save();
+  res.json({ blockedDates: listing.blockedDates });
+}
+
 // PUT /api/listings/:id (multipart) — owner edits; new photos are added; goes back to pending
 export async function updateListing(req, res) {
   const listing = await Listing.findOne({ _id: req.params.id, host: req.user._id });

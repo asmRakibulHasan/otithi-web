@@ -1,18 +1,26 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { MapPin, Landmark, ShieldCheck, Users } from 'lucide-react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { MapPin, Landmark, ShieldCheck, Users, Check, X } from 'lucide-react';
+import api from '../api/axios.js';
 import useApi from '../hooks/useApi.js';
+import { useAuth } from '../context/AuthContext.jsx';
 import Card from '../components/Card.jsx';
 import Chip from '../components/Chip.jsx';
 import Button from '../components/Button.jsx';
 import Photo from '../components/Photo.jsx';
 import { Loading, ErrorBox, Empty } from '../components/State.jsx';
-import { answer, taka } from '../lib/listing.js';
+import { answer, taka, errorMessage } from '../lib/listing.js';
+import { nightsBetween, todayInput } from '../lib/booking.js';
 
-const nightsBetween = (a, b) => {
-  const n = Math.round((new Date(b) - new Date(a)) / 86400000);
-  return n > 0 ? n : 0;
-};
+// Spread the group over the chosen houses, biggest first. Houses not needed get 0.
+function allocate(houses, guests) {
+  let left = guests;
+  return [...houses].sort((a, b) => b.capacity - a.capacity).map((h) => {
+    const n = Math.min(h.capacity, left);
+    left -= n;
+    return { listing: h, guests: n };
+  });
+}
 
 // 03 · Village page — all host households in one village + group stay planner
 export default function Village() {
@@ -20,6 +28,12 @@ export default function Village() {
   const { data: village, loading, error } = useApi(`/villages/${id}`);
   const [selected, setSelected] = useState([]);
   const [plan, setPlan] = useState({ checkIn: '', checkOut: '', guests: '' });
+  const [results, setResults] = useState(null); // [{ name, ok, message }]
+  const [planError, setPlanError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   if (loading) return <Loading />;
   if (error) return <div className="wrap py-10"><ErrorBox message={error} /></div>;
@@ -30,6 +44,31 @@ export default function Village() {
   const nights = nightsBetween(plan.checkIn, plan.checkOut);
   const total = picked.reduce((s, l) => s + l.pricePerNight, 0) * nights;
   const guests = Number(plan.guests) || 0;
+
+  const sendRequests = async () => {
+    setPlanError('');
+    setResults(null);
+    if (!user) return navigate('/login', { state: { from: location.pathname } });
+    if (user.role !== 'traveller') return setPlanError('Only traveller accounts can send booking requests');
+    if (user.status !== 'approved') return setPlanError('You can send requests once the admin verifies your ID');
+    if (!picked.length) return setPlanError('Tick at least one house');
+    if (nights < 1) return setPlanError('Choose check-in and check-out dates');
+    if (!guests) return setPlanError('Enter your group size');
+    if (capacity < guests) return setPlanError(`These houses sleep ${capacity}. Add another house for ${guests} guests.`);
+
+    setBusy(true);
+    const plans = allocate(picked, guests).filter((p) => p.guests > 0);
+    const settled = await Promise.allSettled(plans.map((p) => api.post('/bookings', {
+      listing: p.listing._id, checkIn: plan.checkIn, checkOut: plan.checkOut, guests: p.guests,
+      message: `Group stay: ${guests} guests across ${plans.length} houses in ${village.name}.`,
+    })));
+    setResults(plans.map((p, i) => ({
+      name: `${p.listing.host?.name}'s house · ${p.guests} guest${p.guests > 1 ? 's' : ''}`,
+      ok: settled[i].status === 'fulfilled',
+      message: settled[i].status === 'fulfilled' ? 'Request sent' : errorMessage(settled[i].reason),
+    })));
+    setBusy(false);
+  };
 
   const toggle = (lid) => setSelected((s) => (s.includes(lid) ? s.filter((x) => x !== lid) : [...s, lid]));
 
@@ -109,9 +148,9 @@ export default function Village() {
             <p className="text-sm text-muted">{picked.length} house{picked.length === 1 ? '' : 's'} selected</p>
             <div className="grid grid-cols-2 gap-3">
               <div><label className="label" htmlFor="g-in">Check-in</label>
-                <input id="g-in" type="date" className="input" value={plan.checkIn} onChange={(e) => setPlan({ ...plan, checkIn: e.target.value })} /></div>
+                <input id="g-in" type="date" min={todayInput()} className="input" value={plan.checkIn} onChange={(e) => setPlan({ ...plan, checkIn: e.target.value })} /></div>
               <div><label className="label" htmlFor="g-out">Check-out</label>
-                <input id="g-out" type="date" className="input" value={plan.checkOut} onChange={(e) => setPlan({ ...plan, checkOut: e.target.value })} /></div>
+                <input id="g-out" type="date" min={plan.checkIn || todayInput()} className="input" value={plan.checkOut} onChange={(e) => setPlan({ ...plan, checkOut: e.target.value })} /></div>
             </div>
             <div><label className="label" htmlFor="g-size">Group size</label>
               <input id="g-size" type="number" min="1" className="input" value={plan.guests} onChange={(e) => setPlan({ ...plan, guests: e.target.value })} /></div>
@@ -134,9 +173,21 @@ export default function Village() {
               <div className="flex justify-between"><span>Est. total{nights ? ` for ${nights} night${nights > 1 ? 's' : ''}` : ''}</span><strong>{nights ? taka(total) : '—'}</strong></div>
             </div>
 
-            <Button disabled title="Booking requests arrive in Phase 4">
-              Send {picked.length || ''} booking request{picked.length === 1 ? '' : 's'}
+            <Button onClick={sendRequests} disabled={busy}>
+              {busy ? 'Sending…' : `Send ${picked.length || ''} booking request${picked.length === 1 ? '' : 's'}`}
             </Button>
+            <ErrorBox message={planError} />
+            {results && (
+              <ul className="flex flex-col gap-2 text-sm" aria-live="polite">
+                {results.map((r) => (
+                  <li key={r.name} className={`flex items-start gap-2 rounded-xl p-2.5 ${r.ok ? 'bg-paddy-soft text-paddy' : 'bg-danger-soft text-danger'}`}>
+                    {r.ok ? <Check size={16} className="mt-0.5 flex-none" aria-hidden="true" /> : <X size={16} className="mt-0.5 flex-none" aria-hidden="true" />}
+                    <span><strong>{r.name}</strong> — {r.message}</span>
+                  </li>
+                ))}
+                {results.some((r) => r.ok) && <li><Link to="/traveller" className="font-semibold">See my bookings →</Link></li>}
+              </ul>
+            )}
             <p className="text-[13px] text-muted">Each host accepts separately. You&apos;ll get one booking code per house. Pay each host in cash.</p>
           </Card>
         </aside>

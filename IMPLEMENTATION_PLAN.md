@@ -193,11 +193,12 @@ otithi/
 - [x] Home: search box + featured villages; seed has 9 hosts and 9 rooms (1 pending)
 
 ### Phase 4 — Booking flow (Day 9–12)
-- [ ] Booking model + request route (check verified user, dates not blocked or overlapping)
-- [ ] Host: incoming requests with the guest's review history, accept (generate `OT-XXXX`) or decline
-- [ ] Traveller: My bookings tabs, booking code view with directions unlocked, cancel
-- [ ] Host: availability calendar (blocked dates), mark completed by entering the code
-- [ ] Village page: select several houses → send several requests
+- [x] Booking model + request route (verified traveller, future dates, ≤30 nights, capacity, no overlap with accepted stays or blocked dates, no duplicate requests)
+- [x] Host: incoming requests with guest history (completed stays; reviews added in Phase 5), accept (generate `OT-XXXX`, auto-decline overlapping requests) or decline
+- [x] Traveller: My bookings tabs, booking page with code + directions/phone unlocked, cancel, saved rooms
+- [x] Host: availability calendar (tap to block/unblock), mark completed by entering the code (from check-in day)
+- [x] Village page: tick several houses → group split across houses → one request per house
+- [x] Seed: 8 demo bookings (one checks in today: code `OT-5RT8` at Rahima's)
 
 ### Phase 5 — Reviews, reports, admin (Day 13–16)
 - [ ] Review model: guest → host (with "checklist accurate?") and host → guest

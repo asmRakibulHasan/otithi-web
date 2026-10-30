@@ -1,4 +1,4 @@
-// Demo data for local development. WARNING: wipes users, districts, villages and listings.
+// Demo data for local development. WARNING: wipes users, districts, villages, listings and bookings.
 // Run: npm run seed
 import 'dotenv/config';
 import mongoose from 'mongoose';
@@ -7,6 +7,7 @@ import User from './models/User.js';
 import District from './models/District.js';
 import Village from './models/Village.js';
 import Listing from './models/Listing.js';
+import Booking from './models/Booking.js';
 
 const districts = {
   Sylhet: [
@@ -123,7 +124,7 @@ const listings = [
 async function seed() {
   await connectDB();
 
-  await Promise.all([User.deleteMany(), District.deleteMany(), Village.deleteMany(), Listing.deleteMany()]);
+  await Promise.all([User.deleteMany(), District.deleteMany(), Village.deleteMany(), Listing.deleteMany(), Booking.deleteMany()]);
 
   const villageByName = {};
   for (const [districtName, villages] of Object.entries(districts)) {
@@ -135,7 +136,8 @@ async function seed() {
 
   // User.create (not insertMany) so the password hashing hook runs.
   await User.create({ name: 'Otithi Admin', email: 'admin@otithi.local', phone: '01700000000', password: 'admin123', role: 'admin', status: 'approved' });
-  await User.create({ name: 'Tania Akter', email: 'tania@otithi.local', phone: '01711111111', password: 'password123', role: 'traveller', status: 'approved' });
+  const tania = await User.create({ name: 'Tania Akter', email: 'tania@otithi.local', phone: '01711111111', password: 'password123', role: 'traveller', status: 'approved' });
+  const sadia = await User.create({ name: 'Sadia Afrin', email: 'sadia@otithi.local', phone: '01788888888', password: 'password123', role: 'traveller', status: 'approved' });
   await User.create({ name: 'Mahmud Hasan', email: 'mahmud@otithi.local', phone: '01722222222', password: 'password123', role: 'traveller', status: 'pending' });
 
   const hostByKey = {};
@@ -146,15 +148,42 @@ async function seed() {
     });
   }
 
+  const roomByHost = {};
   for (const [key, fields] of listings) {
     const host = hostByKey[key];
-    await Listing.create({ status: 'approved', ...fields, host: host._id, village: host.village, photos: [] });
+    const room = await Listing.create({ status: 'approved', ...fields, host: host._id, village: host.village, photos: [] });
+    roomByHost[key] ||= room; // first room of each host
   }
 
-  console.log(`Seeded ${Object.keys(districts).length} districts, ${Object.keys(villageByName).length} villages, ${hosts.length + 3} users, ${listings.length} rooms`);
+  // Bookings, with dates relative to today so the demo always looks current
+  const today = new Date();
+  const day = (offset) => new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + offset));
+  const book = (guest, hostKey, start, nights, guests, status, extra = {}) => {
+    const room = roomByHost[hostKey];
+    return Booking.create({
+      listing: room._id, guest: guest._id, host: room.host, checkIn: day(start), checkOut: day(start + nights),
+      nights, guests, totalPrice: nights * room.pricePerNight, status, ...extra,
+    });
+  };
+
+  await book(tania, 'rahima', 14, 2, 2, 'accepted', { code: 'OT-7K2Q', acceptedAt: day(-1),
+    message: 'Assalamu alaikum! Two of us (me and my sister) are visiting Jaflong. We will arrive by CNG around 3 pm.' });
+  await book(tania, 'kashem', 30, 2, 3, 'requested', { message: 'Three friends, first time on the haor.' });
+  await book(tania, 'lalthang', -14, 2, 2, 'completed', { code: 'OT-4M8C', acceptedAt: day(-30), completedAt: day(-12) });
+  await book(tania, 'shefali', 40, 1, 1, 'cancelled', { cancelledAt: day(-3) });
+  await book(sadia, 'rahima', 0, 1, 2, 'accepted', { code: 'OT-5RT8', acceptedAt: day(-5) });
+  await book(sadia, 'rahima', 21, 2, 2, 'requested', { message: 'Coming with my mother. We are vegetarian — is that okay?' });
+  await book(sadia, 'rahima', -40, 3, 2, 'completed', { code: 'OT-2Z6P', acceptedAt: day(-50), completedAt: day(-37) });
+  await book(sadia, 'mong', -60, 2, 1, 'completed', { code: 'OT-9H3D', acceptedAt: day(-70), completedAt: day(-58) });
+
+  roomByHost.rahima.blockedDates = [day(17), day(18)];
+  await roomByHost.rahima.save();
+
+  console.log(`Seeded ${Object.keys(districts).length} districts, ${Object.keys(villageByName).length} villages, ${hosts.length + 4} users, ${listings.length} rooms, 8 bookings`);
   console.log('Admin:     admin@otithi.local / admin123');
   console.log('Traveller: tania@otithi.local / password123');
   console.log('Host:      rahima@otithi.local / password123');
+  console.log("Rahima can mark Sadia's stay (today) completed with code OT-5RT8");
   await mongoose.disconnect();
 }
 

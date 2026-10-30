@@ -10,6 +10,9 @@ import Listing from './pages/Listing.jsx';
 import HostDashboard from './pages/host/Dashboard.jsx';
 import AddRoom from './pages/host/AddRoom.jsx';
 import AdminDashboard from './pages/admin/Dashboard.jsx';
+import Booking from './pages/Booking.jsx';
+import BookingDetail from './pages/BookingDetail.jsx';
+import TravellerDashboard from './pages/traveller/Dashboard.jsx';
 
 export default function App() {
   return (
@@ -25,8 +28,9 @@ export default function App() {
         <Route path="/listing/:id" element={<Listing />} />
 
         <Route element={<ProtectedRoute roles={['traveller']} />}>
-          <Route path="/booking/:id" element={<ComingSoon title="Booking" phase={4} />} />
-          <Route path="/traveller" element={<ComingSoon title="My bookings" phase={4} />} />
+          <Route path="/booking/:id" element={<Booking />} />
+          <Route path="/bookings/:id" element={<BookingDetail />} />
+          <Route path="/traveller" element={<TravellerDashboard />} />
         </Route>
 
         <Route element={<ProtectedRoute roles={['host']} />}>
