@@ -1,0 +1,41 @@
+@import '@fontsource/hind-siliguri/400.css';
+@import '@fontsource/hind-siliguri/500.css';
+@import '@fontsource/hind-siliguri/600.css';
+@import '@fontsource/hind-siliguri/700.css';
+@import '@fontsource-variable/bricolage-grotesque';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-ground font-body text-ink text-base leading-relaxed;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display tracking-tight leading-tight;
+  }
+  a {
+    @apply text-paddy hover:text-paddy-dark;
+  }
+}
+
+@layer components {
+  .wrap {
+    @apply mx-auto w-full max-w-wrap px-6;
+  }
+  .input {
+    @apply min-h-12 w-full rounded-xl border-[1.5px] border-field bg-white px-3.5 text-[15px] text-ink outline-none focus:border-paddy;
+  }
+  .label {
+    @apply mb-1.5 block text-[13px] font-semibold text-[#3A4540];
+  }
+  .eyebrow {
+    @apply text-[13px] font-bold uppercase tracking-[.08em] text-paddy;
+  }
+  /* Nakshi-kantha dashed outline: only for search, checklist, directions, booking code */
+  .stitch {
+    outline: 2px dashed #D6C9A8;
+    outline-offset: -10px;
+  }
+}
