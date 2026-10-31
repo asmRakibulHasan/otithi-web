@@ -68,17 +68,15 @@ Open **http://localhost:5173**. The API runs on http://localhost:5050, and the w
 
 ## Demo accounts
 
-All passwords are `password123`, except the admin's.
-
-| Role | Email | Notes |
-|---|---|---|
-| Admin | `admin@otithi.local` / `admin123` | 2 users and 1 room waiting for approval, 2 open reports |
-| Traveller | `tania@otithi.local` | One accepted booking (code `OT-7K2Q`), one request waiting; a completed stay at Lalthang's she hasn't reviewed yet |
-| Traveller | `sadia@otithi.local` | Has past stays and reviews from hosts |
-| Host | `rahima@otithi.local` | A request to accept; Sadia checks in **today**, so you can complete it with code `OT-5RT8`; blocked dates; a pending room |
-| Pending users | `mahmud@otithi.local`, `jahanara@otithi.local` | Show the "Verification pending" banner |
-
-Other hosts: `karim`, `abdulhai`, `shefali`, `nurul`, `lalthang`, `kashem`, `mong` (all `@otithi.local`).
+| Role | Email | Password | Notes |
+|---|---|---|---|
+| Admin | `admin@otithi.local` | `admin123` | 2 users and 1 room waiting for approval, 2 open reports |
+| Traveller | `tania@otithi.local` | `password123` | One accepted booking (code `OT-7K2Q`), one request waiting; a completed stay at Lalthang's she hasn't reviewed yet |
+| Traveller | `sadia@otithi.local` | `password123` | Has past stays and reviews from hosts |
+| Host | `rahima@otithi.local` | `password123` | A request to accept; Sadia checks in **today**, so you can complete it with code `OT-5RT8`; blocked dates; a pending room |
+| Traveller (pending) | `mahmud@otithi.local` | `password123` | Shows the "Verification pending" banner |
+| Host (pending) | `jahanara@otithi.local` | `password123` | Shows the "Verification pending" banner |
+| Other hosts | `karim`, `abdulhai`, `shefali`, `nurul`, `lalthang`, `kashem`, `mong` (all `@otithi.local`) | `password123` | Approved hosts with published rooms |
 
 ## Demo script (about 5 minutes)
 
