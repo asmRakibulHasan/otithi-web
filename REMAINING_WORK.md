@@ -71,7 +71,9 @@
 - [ ] **Presentation slides and the live demo.** Follow the demo script in `README.md`. Run `npm --prefix server run seed` just before presenting so the data is fresh. Remember that it **wipes** the database.
 - [ ] **Viva preparation.** Likely questions:
   - Why MongoDB and not SQL? (It's in the approved MERN proposal, it runs fully locally, and the flexible checklist and safety fields fit documents well.)
-  - How do you prevent double bookings? (An overlap check against accepted stays and blocked dates; accepting a request automatically declines other requests for the same dates.)
+  - How do you prevent double bookings? (Travellers see booked nights on the calendar and can't pick them. On accept, each night is written to `bookednights`, which has a unique index on (room, night), so the database itself refuses a second booking for the same night, even when two accepts happen at the same moment. Other overlapping requests are declined automatically.)
+  - Why can't a traveller cancel at the last minute? (Accepted bookings can be cancelled only until 2 days before check-in, so the host has time to find another guest. Requests the host hasn't accepted can be withdrawn any time.)
+  - What happens when a host edits a room? (It stays live. Changes to trust-related fields, such as the checklist or photos, are flagged, and the admin sees before → after and approves or unpublishes.)
   - Why no online payment? (Rural hosts have no merchant accounts, and keeping money out of the platform removes the main reason families would refuse to join.)
   - How is the ID document kept private? (It's stored outside the public folder, and only an admin can fetch it, through a protected API route.)
   - Why Bangladesh time (UTC+6) for dates? (The platform is Bangladesh-only, so check-in and "today" must match local days.)
@@ -83,11 +85,9 @@ In rough order of value for the demo:
 | Feature | Effort | Notes |
 |---|---|---|
 | **Real photos in the demo data** | Small | Log in as each host → add-room wizard, or put images in `server/uploads/` and set `photos: ['/uploads/name.jpg']` in `server/seed.js`. Right now every room shows the hills illustration. |
-| **Edit a room** (host) | Small–Medium | The server already supports it (`PUT /api/listings/:id`, which sends the room back to admin review). Only the screen is missing; it can reuse `client/src/pages/host/AddRoom.jsx`. |
 | **Bangla / English switch** | Medium | Rural hosts would likely need Bangla. The Hind Siliguri font already supports Bangla. Needs a translations file and a toggle in the navbar. |
 | **Password reset** | Small (offline version) | No email or SMS is possible offline, so the simplest version is the admin setting a temporary password from the admin panel. |
 | **Admin: suspend a user / delete a room** | Small | Useful when acting on reports. Today the admin can only reject users and rooms that are still pending. |
-| **Delete individual photos** when editing a room | Small | Comes with "Edit a room". |
 | **Notifications** (e.g. a badge for new requests) | Medium | The host dashboard already shows counts; a navbar badge would be a nice touch. |
 
 ## 5. Known limitations (mention in the report)

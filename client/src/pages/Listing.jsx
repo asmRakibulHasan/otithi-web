@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Heart, ShieldCheck, Users, BedDouble, DoorOpen, Soup, MapPin, Landmark, Lock, Check, Minus, Flag } from 'lucide-react';
+import { Heart, ShieldCheck, Users, BedDouble, DoorOpen, Soup, MapPin, Landmark, Lock, Check, Minus, Flag, Pencil } from 'lucide-react';
 import useApi from '../hooks/useApi.js';
 import Card from '../components/Card.jsx';
 import Chip from '../components/Chip.jsx';
@@ -10,8 +10,10 @@ import { Loading, ErrorBox } from '../components/State.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import Stars from '../components/Stars.jsx';
 import ReportDialog from '../components/ReportDialog.jsx';
+import AvailabilityCalendar from '../components/AvailabilityCalendar.jsx';
 import { CHECKLIST, SAFETY, answer, toneWord, taka } from '../lib/listing.js';
-import { fmtDay } from '../lib/booking.js';
+import { fmtDay, nightsBetween, todayBD } from '../lib/booking.js';
+import { rangeProblem } from '../lib/availability.js';
 
 const accuracyText = { yes: 'Checklist was accurate', mostly: 'Checklist mostly accurate', no: 'Checklist was not accurate' };
 const accuracyTone = { yes: 'good', mostly: 'warn', no: 'bad' };
@@ -41,13 +43,16 @@ export default function Listing() {
   const [req, setReq] = useState({ checkIn: '', checkOut: '', guests: 1 });
   const [reporting, setReporting] = useState(false);
   const { data: reviews } = useApi(`/reviews/listing/${id}`);
+  const avail = useApi(`/listings/${id}/availability`);
 
   if (loading) return <Loading />;
   if (error) return <div className="wrap py-10"><ErrorBox message={error} /></div>;
 
   const v = l.village;
   const photos = l.photos || [];
-  const nights = Math.max(0, Math.round((new Date(req.checkOut) - new Date(req.checkIn)) / 86400000)) || 0;
+  const nights = nightsBetween(req.checkIn, req.checkOut);
+  const dateProblem = rangeProblem(avail.data, req.checkIn, req.checkOut);
+  const isOwner = Boolean(user && user._id === l.host?._id);
 
   const toggleSave = () => {
     const list = readSaved();
@@ -71,6 +76,11 @@ export default function Listing() {
           This room is <strong>{l.status}</strong> — only you{user?.role === 'admin' ? ' (admin)' : ' and the admin'} can see it.
         </p>
       )}
+      {isOwner && l.status === 'approved' && l.needsReview && (
+        <p className="rounded-xl bg-mustard-soft px-4 py-3 text-sm font-semibold text-[#4A3A10]" role="status">
+          Your recent changes are live. The admin will double-check them soon.
+        </p>
+      )}
 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
@@ -85,6 +95,7 @@ export default function Listing() {
           </div>
         </div>
         <div className="flex gap-1">
+          {isOwner && <Button variant="outline" to={`/host/rooms/${id}/edit`}><Pencil size={18} aria-hidden="true" />Edit room</Button>}
           <Button variant="ghost" onClick={toggleSave} aria-pressed={saved}>
             <Heart size={18} aria-hidden="true" className={saved ? 'fill-danger text-danger' : ''} />{saved ? 'Saved' : 'Save'}
           </Button>
@@ -227,12 +238,19 @@ export default function Listing() {
         <aside className="w-full lg:sticky lg:top-6 lg:w-[360px] lg:flex-none">
           <Card as="form" onSubmit={onRequest} className="flex flex-col gap-4 p-6">
             <div><strong className="font-display text-3xl text-paddy">{taka(l.pricePerNight)}</strong><span className="text-muted"> / night · sleeps {l.capacity}</span></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="label" htmlFor="r-in">Check-in</label>
-                <input id="r-in" type="date" required className="input" value={req.checkIn} onChange={(e) => setReq({ ...req, checkIn: e.target.value })} /></div>
-              <div><label className="label" htmlFor="r-out">Check-out</label>
-                <input id="r-out" type="date" required className="input" value={req.checkOut} min={req.checkIn} onChange={(e) => setReq({ ...req, checkOut: e.target.value })} /></div>
-            </div>
+            <fieldset className="flex flex-col gap-1">
+              <legend className="label">Choose your dates</legend>
+              {avail.error ? (
+                // Calendar failed to load: plain date fields still work, the server checks the dates
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="label" htmlFor="r-in">Check-in</label>
+                    <input id="r-in" type="date" required className="input" min={todayBD()} value={req.checkIn} onChange={(e) => setReq({ ...req, checkIn: e.target.value })} /></div>
+                  <div><label className="label" htmlFor="r-out">Check-out</label>
+                    <input id="r-out" type="date" required className="input" min={req.checkIn || todayBD()} value={req.checkOut} onChange={(e) => setReq({ ...req, checkOut: e.target.value })} /></div>
+                </div>
+              ) : <AvailabilityCalendar availability={avail.data} value={req} onChange={(v) => setReq({ ...req, ...v })} />}
+            </fieldset>
+            {dateProblem && <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-semibold text-danger" role="alert">{dateProblem}</p>}
             <div><label className="label" htmlFor="r-guests">Guests</label>
               <select id="r-guests" className="input" value={req.guests} onChange={(e) => setReq({ ...req, guests: e.target.value })}>
                 {Array.from({ length: l.capacity }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n} guest{n > 1 ? 's' : ''}</option>)}
@@ -242,7 +260,9 @@ export default function Listing() {
               <div className="flex justify-between"><dt>Platform fee</dt><dd>৳0</dd></div>
               <div className="flex justify-between font-bold"><dt>Pay host in cash</dt><dd>{taka(l.pricePerNight * nights)}</dd></div>
             </dl>
-            <Button type="submit" size="lg" disabled={!canRequest || l.status !== 'approved' || nights < 1}>Send booking request</Button>
+            <Button type="submit" size="lg" disabled={!canRequest || l.status !== 'approved' || nights < 1 || Boolean(dateProblem)}>
+              {nights < 1 ? 'Choose dates to continue' : 'Send booking request'}
+            </Button>
             <p className="text-[13px] text-muted">No online payment. You&apos;ll get a booking code when the host accepts — show it on arrival and pay in cash.</p>
             <p className="text-[13px] text-muted">Only verified travellers can send requests.</p>
           </Card>

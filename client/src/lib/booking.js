@@ -31,3 +31,10 @@ export const STATUS = {
 export const todayBD = () => new Date(Date.now() + 6 * 3600000).toISOString().slice(0, 10);
 
 export const isPast = (d) => new Date(d) < new Date(todayInput() + 'T00:00:00Z');
+
+// "2026-12-12" + n days → "2026-12-14"
+export const addDays = (key, n) => dayKey(Date.parse(`${key}T00:00:00Z`) + n * 86400000);
+
+// Accepted bookings can be cancelled until this many days before check-in (same rule as the server)
+export const CANCEL_DAYS_BEFORE = 2;
+export const cancelDeadlineFor = (checkIn) => addDays(checkIn, -CANCEL_DAYS_BEFORE);

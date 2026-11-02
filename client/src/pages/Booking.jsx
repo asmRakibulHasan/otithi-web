@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, CalendarClock } from 'lucide-react';
 import api from '../api/axios.js';
 import useApi from '../hooks/useApi.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -8,9 +8,11 @@ import Card from '../components/Card.jsx';
 import Chip from '../components/Chip.jsx';
 import Button from '../components/Button.jsx';
 import Photo from '../components/Photo.jsx';
+import AvailabilityCalendar from '../components/AvailabilityCalendar.jsx';
 import { Loading, ErrorBox } from '../components/State.jsx';
 import { taka, errorMessage } from '../lib/listing.js';
-import { todayInput, nightsBetween } from '../lib/booking.js';
+import { todayBD, nightsBetween, fmtDay, cancelDeadlineFor, CANCEL_DAYS_BEFORE } from '../lib/booking.js';
+import { rangeProblem } from '../lib/availability.js';
 
 // 05 · Booking — State 1: request to stay
 export default function Booking() {
@@ -19,6 +21,7 @@ export default function Booking() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: l, loading, error } = useApi(`/listings/${id}`);
+  const avail = useApi(`/listings/${id}/availability`);
 
   const [form, setForm] = useState({
     checkIn: params.get('checkIn') || '',
@@ -34,6 +37,9 @@ export default function Booking() {
   if (error) return <div className="wrap py-10"><ErrorBox message={error} /></div>;
 
   const nights = nightsBetween(form.checkIn, form.checkOut);
+  const dateProblem = rangeProblem(avail.data, form.checkIn, form.checkOut);
+  const deadline = form.checkIn && cancelDeadlineFor(form.checkIn);
+  const lateBooking = deadline && deadline < todayBD(); // check-in is less than 2 days away
   const total = nights * l.pricePerNight;
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
 
@@ -41,6 +47,7 @@ export default function Booking() {
     e.preventDefault();
     setSendError('');
     if (nights < 1) return setSendError('Choose check-in and check-out dates');
+    if (dateProblem) return setSendError(dateProblem);
     if (!form.agree) return setSendError('Please confirm you have read the checklist and house rules');
     setBusy(true);
     try {
@@ -50,6 +57,7 @@ export default function Booking() {
       navigate(`/bookings/${data._id}`, { replace: true });
     } catch (err) {
       setSendError(errorMessage(err));
+      if (err.response?.status === 409) avail.reload(); // someone just booked these dates: refresh the calendar
     } finally {
       setBusy(false);
     }
@@ -71,16 +79,34 @@ export default function Booking() {
               Your ID is waiting for admin approval. You can send requests once you are verified.
             </p>
           )}
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div><label className="label" htmlFor="b-in">Check-in</label>
-              <input id="b-in" type="date" required min={todayInput()} className="input" value={form.checkIn} onChange={set('checkIn')} /></div>
-            <div><label className="label" htmlFor="b-out">Check-out</label>
-              <input id="b-out" type="date" required min={form.checkIn || todayInput()} className="input" value={form.checkOut} onChange={set('checkOut')} /></div>
-            <div><label className="label" htmlFor="b-guests">Guests</label>
-              <select id="b-guests" className="input" value={form.guests} onChange={set('guests')}>
-                {Array.from({ length: l.capacity }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n} guest{n > 1 ? 's' : ''}</option>)}
-              </select></div>
-          </div>
+          <fieldset className="flex flex-col gap-1">
+            <legend className="label">Dates</legend>
+            {avail.error ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div><label className="label" htmlFor="b-in">Check-in</label>
+                  <input id="b-in" type="date" required min={todayBD()} className="input" value={form.checkIn} onChange={set('checkIn')} /></div>
+                <div><label className="label" htmlFor="b-out">Check-out</label>
+                  <input id="b-out" type="date" required min={form.checkIn || todayBD()} className="input" value={form.checkOut} onChange={set('checkOut')} /></div>
+              </div>
+            ) : (
+              <div className="max-w-md"><AvailabilityCalendar availability={avail.data} value={form} onChange={(v) => setForm({ ...form, ...v })} /></div>
+            )}
+          </fieldset>
+          {dateProblem && <p className="rounded-xl bg-danger-soft px-4 py-3 text-sm font-semibold text-danger" role="alert">{dateProblem}</p>}
+          <div className="max-w-xs"><label className="label" htmlFor="b-guests">Guests</label>
+            <select id="b-guests" className="input" value={form.guests} onChange={set('guests')}>
+              {Array.from({ length: l.capacity }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n} guest{n > 1 ? 's' : ''}</option>)}
+            </select></div>
+          {form.checkIn && (
+            <p className={`flex items-start gap-2.5 rounded-xl px-4 py-3 text-sm ${lateBooking ? 'bg-mustard-soft text-[#4A3A10]' : 'bg-ground'}`}>
+              <CalendarClock size={18} aria-hidden="true" className="mt-0.5 flex-none" />
+              <span>
+                {lateBooking
+                  ? <><strong>No cancellation:</strong> check-in is less than {CANCEL_DAYS_BEFORE} days away, so once the host accepts you can&apos;t cancel online.</>
+                  : <><strong>Cancellation:</strong> you can cancel until <strong>{fmtDay(deadline, { weekday: 'short', day: 'numeric', month: 'short' })}</strong> ({CANCEL_DAYS_BEFORE} days before check-in), so the host has time to find another guest. After that you can&apos;t cancel online.</>}
+              </span>
+            </p>
+          )}
           <div>
             <label className="label" htmlFor="b-msg">Message to host</label>
             <textarea id="b-msg" rows={4} maxLength={1000} className="input py-3" value={form.message} onChange={set('message')}
@@ -93,7 +119,7 @@ export default function Booking() {
           <ErrorBox message={sendError} />
           <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line pt-5">
             <div><div className="text-sm text-muted">Total to pay host in cash</div><div className="font-display text-3xl font-extrabold text-paddy">{taka(total)}</div></div>
-            <Button type="submit" size="lg" disabled={busy || notVerified}>{busy ? 'Sending…' : 'Send request'}</Button>
+            <Button type="submit" size="lg" disabled={busy || notVerified || Boolean(dateProblem)}>{busy ? 'Sending…' : 'Send request'}</Button>
           </div>
         </Card>
 

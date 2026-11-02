@@ -111,9 +111,12 @@ IMPLEMENTATION_PLAN.md  phases, data model, API list
 
 ## Rules the app enforces
 
-- **Verification:** only travellers the admin has approved can send requests, and only approved hosts can add rooms. A room goes live only after the admin publishes it. If the host edits it, it goes back for review.
-- **Bookings:** check-in must be today or later, Bangladesh time (UTC+6). A stay can be at most 30 nights, and the guest count can't exceed the room's capacity. Dates can't overlap an accepted stay or a date the host blocked.
+- **Verification:** only travellers the admin has approved can send requests, and only approved hosts can add rooms. A room goes live only after the admin publishes it.
+- **Bookings:** check-in must be today or later, Bangladesh time (UTC+6). A stay can be at most 30 nights, and the guest count can't exceed the room's capacity. Dates can't overlap an accepted stay or a date the host blocked. The room page calendar shows booked and unavailable days, so travellers can't pick them.
+- **No double booking:** accepting a request locks each night in the `bookednights` collection, which has a unique index on (room, night). Even if the host accepts two overlapping requests at the same moment, the database lets only one through.
 - **Accepting** issues a unique `OT-XXXX` code and declines other requests for the same dates.
+- **Cancelling:** a traveller can withdraw a request any time before check-in. An accepted booking can be cancelled only until **2 days before check-in**, so the host has time to find another guest. The traveller can leave a reason, the host sees it, and the nights become free again.
+- **Editing a room:** the host can edit a room at any time (details, price, photos, cover photo, checklist). A live room stays live. Changes to the title, photos, checklist, safety answers or directions are flagged for the admin, who sees what changed (for example, Toilet: Outside → Attached) and can approve or unpublish. Price changes don't affect existing bookings. Capacity can't go below an upcoming accepted booking's guest count.
 - **Privacy:** full directions and the host's phone number are shown only after acceptance. The guest's phone is shown to the host only after acceptance. ID photos are visible only to the admin.
 - **Reviews:** one per side, only after a completed stay. Guests must answer whether the checklist was accurate.
 - **Locations:** the admin can delete a village only if it has no rooms, and a district only if it has no villages.

@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Check, Copy, Lock, MapPin, Phone, Landmark, Flag } from 'lucide-react';
-import api from '../api/axios.js';
+import { Check, Copy, Lock, MapPin, Phone, Landmark, Flag, CalendarClock } from 'lucide-react';
 import useApi from '../hooks/useApi.js';
 import Card from '../components/Card.jsx';
 import Chip from '../components/Chip.jsx';
 import Button from '../components/Button.jsx';
 import ReviewForm from '../components/ReviewForm.jsx';
 import ReportDialog from '../components/ReportDialog.jsx';
+import CancelDialog from '../components/CancelDialog.jsx';
 import { Loading, ErrorBox } from '../components/State.jsx';
-import { taka, errorMessage } from '../lib/listing.js';
-import { fmtDay, STATUS, isPast } from '../lib/booking.js';
+import { taka } from '../lib/listing.js';
+import { fmtDay, STATUS, CANCEL_DAYS_BEFORE } from '../lib/booking.js';
 
 const when = (d) => d && new Date(d).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 
@@ -19,8 +19,8 @@ export default function BookingDetail() {
   const { id } = useParams();
   const { data: b, loading, error, reload } = useApi(`/bookings/${id}`);
   const [copied, setCopied] = useState(false);
-  const [actionError, setActionError] = useState('');
   const [reporting, setReporting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   if (loading) return <Loading />;
   if (error) return <div className="wrap py-10"><ErrorBox message={error} /></div>;
@@ -36,17 +36,6 @@ export default function BookingDetail() {
     } catch { /* clipboard blocked */ }
   };
 
-  const cancel = async () => {
-    if (!window.confirm('Cancel this booking?')) return;
-    setActionError('');
-    try {
-      await api.put(`/bookings/${b._id}/cancel`);
-      reload();
-    } catch (err) {
-      setActionError(errorMessage(err));
-    }
-  };
-
   const steps = [
     { t: 'Request sent', d: when(b.createdAt), done: true },
     { t: 'Accepted by host · code issued', d: when(b.acceptedAt), done: Boolean(b.acceptedAt) },
@@ -54,7 +43,8 @@ export default function BookingDetail() {
     { t: 'Review each other', d: b.reviewedByMe ? 'You reviewed this stay' : 'Was the checklist accurate?', done: Boolean(b.reviewedByMe) },
   ];
 
-  const canCancel = ['requested', 'accepted'].includes(b.status) && !isPast(b.checkIn);
+  const open = ['requested', 'accepted'].includes(b.status);
+  const deadline = fmtDay(b.cancelDeadline, { weekday: 'short', day: 'numeric', month: 'short' });
 
   return (
     <div className="wrap flex flex-col gap-6 pb-16 pt-8">
@@ -68,8 +58,6 @@ export default function BookingDetail() {
         </div>
         <Chip tone={s.tone}>{s.label}</Chip>
       </div>
-
-      <ErrorBox message={actionError} />
 
       <div className="flex flex-wrap items-start gap-8">
         <div className="flex min-w-0 flex-[999_1_520px] flex-col gap-6">
@@ -99,7 +87,9 @@ export default function BookingDetail() {
               </dl>
               {b.status === 'requested' && <p className="text-muted">The host will reply soon. Your booking code appears here when they accept.</p>}
               {b.status === 'declined' && <p className="text-muted">The host could not accept this request. Try other dates or another house in the village.</p>}
-              {b.status === 'cancelled' && <p className="text-muted">You cancelled this booking.</p>}
+              {b.status === 'cancelled' && (
+                <p className="text-muted">You cancelled this booking on {fmtDay(b.cancelledAt)}.{b.cancelReason && <> Reason: “{b.cancelReason}”</>}</p>
+              )}
             </Card>
           )}
 
@@ -144,7 +134,25 @@ export default function BookingDetail() {
             </ol>
           </Card>
           <Button variant="outline" to={`/listing/${l._id}`}>View the room</Button>
-          {canCancel && <Button variant="danger" onClick={cancel}>Cancel {b.status === 'requested' ? 'request' : 'booking'}</Button>}
+          {open && (
+            <Card className="flex flex-col gap-3 p-5">
+              <h2 className="flex items-center gap-2 text-lg font-bold"><CalendarClock size={20} aria-hidden="true" />Cancellation</h2>
+              {b.canCancel ? (
+                <p className="text-[15px]">
+                  {b.status === 'requested'
+                    ? <>You can cancel this request any time before the host accepts. Once accepted, you can cancel until <strong>{deadline}</strong>.</>
+                    : <>You can cancel until <strong>{deadline}</strong> ({CANCEL_DAYS_BEFORE} days before check-in), so {b.host?.name} has time to find another guest.</>}
+                </p>
+              ) : (
+                <p className="text-[15px]">
+                  {b.cancelClosedReason}
+                  {b.unlocked && b.host?.phone && <> Call <a href={`tel:${b.host.phone}`} className="font-semibold">{b.host.phone}</a> if your plans change.</>}
+                </p>
+              )}
+              {b.canCancel && <Button variant="danger" onClick={() => setCancelling(true)}>Cancel {b.status === 'requested' ? 'request' : 'booking'}</Button>}
+            </Card>
+          )}
+          {cancelling && <CancelDialog booking={b} onClose={() => setCancelling(false)} onDone={() => { setCancelling(false); reload(); }} />}
           {['accepted', 'completed'].includes(b.status) && (
             <Button variant="ghost" onClick={() => setReporting(true)}><Flag size={18} aria-hidden="true" />Report a problem</Button>
           )}

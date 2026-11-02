@@ -21,6 +21,7 @@ const bookingSchema = new mongoose.Schema(
     acceptedAt: Date,
     completedAt: Date,
     cancelledAt: Date,
+    cancelReason: { type: String, trim: true, maxlength: 300, default: '' },
   },
   { timestamps: true }
 );

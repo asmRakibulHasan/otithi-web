@@ -1,27 +1,41 @@
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import Booking from '../models/Booking.js';
+import BookedNight from '../models/BookedNight.js';
 import Listing from '../models/Listing.js';
 import Review from '../models/Review.js';
 import { guestRatings } from './reviewController.js';
+import { DAY, todayBD, parseDay } from '../lib/dates.js';
+import { reserveNights, releaseNights, NightsTakenError } from '../lib/bookedNights.js';
 
-const DAY = 86400000;
 const MAX_NIGHTS = 30;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O or 1/I
 
-// "2026-12-12" → Date at UTC midnight, or null
-function parseDay(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return null;
-  const d = new Date(`${value}T00:00:00Z`);
-  return isNaN(d) ? null : d;
-}
+// A traveller can cancel an accepted booking up to this many days before check-in,
+// so the host has time to find another guest.
+export const CANCEL_DAYS_BEFORE = 2;
 
-// Otithi is Bangladesh-only, so "today" is the calendar day in Bangladesh (UTC+6)
-const BD_OFFSET = 6 * 3600000;
-const todayBD = () => {
-  const bd = new Date(Date.now() + BD_OFFSET);
-  return new Date(Date.UTC(bd.getUTCFullYear(), bd.getUTCMonth(), bd.getUTCDate()));
-};
+const shortDay = (d) => new Date(d).toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short' });
+
+// Can the guest cancel this booking today? Used by the cancel route and sent to the client.
+export function cancelRules(b) {
+  const today = todayBD();
+  const checkIn = new Date(b.checkIn);
+  const cancelDeadline = new Date(checkIn.getTime() - CANCEL_DAYS_BEFORE * DAY); // last day to cancel
+  let cancelClosedReason = '';
+  if (b.status === 'requested') {
+    // The host hasn't committed yet, so a request can be withdrawn until check-in day
+    if (checkIn < today) cancelClosedReason = 'The stay has already started';
+  } else if (b.status === 'accepted') {
+    if (checkIn < today) cancelClosedReason = 'The stay has already started';
+    else if (today > cancelDeadline) {
+      cancelClosedReason = `Accepted bookings can be cancelled until ${CANCEL_DAYS_BEFORE} days before check-in (last day was ${shortDay(cancelDeadline)}). Please call the host instead.`;
+    }
+  } else {
+    cancelClosedReason = `This booking is already ${b.status}`;
+  }
+  return { cancelDeadline, canCancel: !cancelClosedReason, cancelClosedReason };
+}
 
 async function newCode() {
   for (;;) {
@@ -31,16 +45,9 @@ async function newCode() {
   }
 }
 
-// Accepted stays or host-blocked dates that overlap [checkIn, checkOut)
-async function datesTaken(listing, checkIn, checkOut, ignoreId) {
-  const clash = await Booking.exists({
-    listing: listing._id,
-    status: 'accepted',
-    checkIn: { $lt: checkOut },
-    checkOut: { $gt: checkIn },
-    ...(ignoreId && { _id: { $ne: ignoreId } }),
-  });
-  if (clash) return 'These dates are already booked';
+// Nights locked by accepted/completed stays, or host-blocked dates, inside [checkIn, checkOut)
+async function datesTaken(listing, checkIn, checkOut) {
+  if (await BookedNight.exists({ listing: listing._id, date: { $gte: checkIn, $lt: checkOut } })) return 'These dates are already booked';
   if (listing.blockedDates.some((d) => d >= checkIn && d < checkOut)) return 'The host is not available on some of these dates';
   return '';
 }
@@ -56,7 +63,7 @@ function withPrivateDetails(booking) {
     if (b.listing) delete b.listing.directions;
     if (b.host) delete b.host.phone;
   }
-  return { ...b, unlocked };
+  return { ...b, unlocked, ...cancelRules(b) };
 }
 
 async function findOwned(req, res, role) {
@@ -163,28 +170,52 @@ export async function hostBookings(req, res) {
   }));
 }
 
-// PUT /api/bookings/:id/accept — host; issues the booking code
+// PUT /api/bookings/:id/accept — host; locks the nights and issues the booking code
 export async function acceptBooking(req, res) {
   const booking = await findOwned(req, res, 'host');
   if (!booking) return;
   if (booking.status !== 'requested') return res.status(400).json({ message: `This request is already ${booking.status}` });
+  if (booking.checkIn < todayBD()) return res.status(400).json({ message: 'The check-in date has passed. Decline this request instead.' });
 
   const listing = await Listing.findById(booking.listing);
-  const taken = await datesTaken(listing, booking.checkIn, booking.checkOut, booking._id);
+  if (booking.guests > listing.capacity) {
+    return res.status(400).json({ message: `This request is for ${booking.guests} guests, but the room now sleeps ${listing.capacity}` });
+  }
+  const taken = await datesTaken(listing, booking.checkIn, booking.checkOut);
   if (taken) return res.status(409).json({ message: taken });
 
-  booking.status = 'accepted';
-  booking.code = await newCode();
-  booking.acceptedAt = new Date();
-  await booking.save();
+  // The unique (room, night) index makes this safe even if two requests are accepted at the same moment
+  try {
+    await reserveNights(booking);
+  } catch (err) {
+    if (err instanceof NightsTakenError) return res.status(409).json({ message: err.message });
+    throw err;
+  }
+
+  // Only flip a booking that is still "requested" (the guest may have cancelled a moment ago)
+  let accepted;
+  try {
+    accepted = await Booking.findOneAndUpdate(
+      { _id: booking._id, status: 'requested' },
+      { status: 'accepted', code: await newCode(), acceptedAt: new Date() },
+      { returnDocument: 'after' }
+    );
+  } catch (err) {
+    await releaseNights(booking._id);
+    throw err;
+  }
+  if (!accepted) {
+    await releaseNights(booking._id);
+    return res.status(409).json({ message: 'This request just changed. Refresh the page.' });
+  }
 
   // The room is now taken on these dates: decline other overlapping requests
   await Booking.updateMany(
-    { _id: { $ne: booking._id }, listing: booking.listing, status: 'requested', checkIn: { $lt: booking.checkOut }, checkOut: { $gt: booking.checkIn } },
+    { _id: { $ne: accepted._id }, listing: accepted.listing, status: 'requested', checkIn: { $lt: accepted.checkOut }, checkOut: { $gt: accepted.checkIn } },
     { status: 'declined' }
   );
 
-  res.json(booking);
+  res.json(accepted);
 }
 
 // PUT /api/bookings/:id/decline — host
@@ -192,21 +223,28 @@ export async function declineBooking(req, res) {
   const booking = await findOwned(req, res, 'host');
   if (!booking) return;
   if (booking.status !== 'requested') return res.status(400).json({ message: `This request is already ${booking.status}` });
-  booking.status = 'declined';
-  await booking.save();
-  res.json(booking);
+  const declined = await Booking.findOneAndUpdate({ _id: booking._id, status: 'requested' }, { status: 'declined' }, { returnDocument: 'after' });
+  if (!declined) return res.status(409).json({ message: 'This request just changed. Refresh the page.' });
+  res.json(declined);
 }
 
-// PUT /api/bookings/:id/cancel — guest, before the stay starts
+// PUT /api/bookings/:id/cancel { reason } — guest. Requests: until check-in day.
+// Accepted bookings: until CANCEL_DAYS_BEFORE days before check-in.
 export async function cancelBooking(req, res) {
   const booking = await findOwned(req, res, 'guest');
   if (!booking) return;
-  if (!['requested', 'accepted'].includes(booking.status)) return res.status(400).json({ message: `This booking is already ${booking.status}` });
-  if (booking.checkIn < todayBD()) return res.status(400).json({ message: 'The stay has already started' });
-  booking.status = 'cancelled';
-  booking.cancelledAt = new Date();
-  await booking.save();
-  res.json(booking);
+  const { canCancel, cancelClosedReason } = cancelRules(booking);
+  if (!canCancel) return res.status(400).json({ message: cancelClosedReason });
+
+  const cancelled = await Booking.findOneAndUpdate(
+    { _id: booking._id, status: booking.status }, // fails if the host accepted/declined in between
+    { status: 'cancelled', cancelledAt: new Date(), cancelReason: String(req.body?.reason || '').trim().slice(0, 300) },
+    { returnDocument: 'after' }
+  );
+  if (!cancelled) return res.status(409).json({ message: 'This booking just changed. Refresh the page and try again.' });
+
+  await releaseNights(booking._id); // the nights are free for other travellers again
+  res.json(cancelled);
 }
 
 // PUT /api/bookings/:id/complete { code } — host, after the guest shows the code and pays cash

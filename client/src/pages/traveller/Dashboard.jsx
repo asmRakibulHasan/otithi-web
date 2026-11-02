@@ -9,9 +9,10 @@ import Chip from '../../components/Chip.jsx';
 import Button from '../../components/Button.jsx';
 import Photo from '../../components/Photo.jsx';
 import ReviewForm from '../../components/ReviewForm.jsx';
+import CancelDialog from '../../components/CancelDialog.jsx';
 import { Loading, ErrorBox, Empty } from '../../components/State.jsx';
-import { taka, errorMessage } from '../../lib/listing.js';
-import { fmtRange, STATUS, isPast } from '../../lib/booking.js';
+import { taka } from '../../lib/listing.js';
+import { fmtDay, fmtRange, STATUS } from '../../lib/booking.js';
 
 const TABS = [
   { key: 'upcoming', label: 'Upcoming', match: (b) => ['requested', 'accepted'].includes(b.status) },
@@ -35,20 +36,9 @@ export default function TravellerDashboard() {
   const { user } = useAuth();
   const { data: bookings, loading, error, reload } = useApi('/bookings/mine');
   const [tab, setTab] = useState('upcoming');
-  const [actionError, setActionError] = useState('');
+  const [cancelling, setCancelling] = useState(null); // booking
   const [reviewing, setReviewing] = useState(null); // booking id
   const saved = useSavedRooms();
-
-  const cancel = async (id) => {
-    if (!window.confirm('Cancel this booking?')) return;
-    setActionError('');
-    try {
-      await api.put(`/bookings/${id}/cancel`);
-      reload();
-    } catch (err) {
-      setActionError(errorMessage(err));
-    }
-  };
 
   const current = TABS.find((t) => t.key === tab);
   const list = (bookings || []).filter(current.match);
@@ -76,7 +66,7 @@ export default function TravellerDashboard() {
         ))}
       </div>
 
-      <ErrorBox message={error || actionError} />
+      <ErrorBox message={error} />
       {loading && <Loading />}
       {!loading && list.length === 0 && (
         <Empty title={tab === 'upcoming' ? 'No upcoming stays' : `No ${tab} bookings`}>
@@ -97,8 +87,12 @@ export default function TravellerDashboard() {
                 <p className="text-sm text-muted">{b.host?.name}&apos;s house, {l?.village?.name} · {b.guests} guest{b.guests > 1 ? 's' : ''} · {taka(b.totalPrice)} cash to host</p>
                 <div className="mt-auto flex flex-wrap gap-2 pt-2">
                   <Button variant="outline" to={`/bookings/${b._id}`}>View booking</Button>
-                  {['requested', 'accepted'].includes(b.status) && !isPast(b.checkIn) && (
-                    <Button variant="danger" onClick={() => cancel(b._id)}>Cancel</Button>
+                  {b.canCancel && <Button variant="danger" onClick={() => setCancelling(b)}>Cancel</Button>}
+                  {b.canCancel && b.status === 'accepted' && (
+                    <span className="self-center text-sm text-muted">Free to cancel until {fmtDay(b.cancelDeadline, { day: 'numeric', month: 'short' })}</span>
+                  )}
+                  {!b.canCancel && b.status === 'accepted' && (
+                    <span className="self-center text-sm text-muted">Cancellation closed · call the host if plans change</span>
                   )}
                   {b.status === 'completed' && !b.reviewedByMe && reviewing !== b._id && (
                     <Button variant="accent" onClick={() => setReviewing(b._id)}>Write a review</Button>
@@ -123,6 +117,8 @@ export default function TravellerDashboard() {
           );
         })}
       </div>
+
+      {cancelling && <CancelDialog booking={cancelling} onClose={() => setCancelling(null)} onDone={() => { setCancelling(null); reload(); }} />}
 
       <section className="flex flex-col gap-4 pt-4">
         <div className="flex items-end justify-between gap-3">

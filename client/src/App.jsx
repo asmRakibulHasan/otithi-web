@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useParams } from 'react-router-dom';
 import Layout from './components/Layout.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import Home from './pages/Home.jsx';
@@ -13,6 +13,12 @@ import AdminDashboard from './pages/admin/Dashboard.jsx';
 import Booking from './pages/Booking.jsx';
 import BookingDetail from './pages/BookingDetail.jsx';
 import TravellerDashboard from './pages/traveller/Dashboard.jsx';
+
+// Fresh wizard state per room, so switching between two rooms' edit pages never mixes them
+function EditRoom() {
+  const { id } = useParams();
+  return <AddRoom key={id} />;
+}
 
 export default function App() {
   return (
@@ -36,6 +42,7 @@ export default function App() {
         <Route element={<ProtectedRoute roles={['host']} />}>
           <Route path="/host" element={<HostDashboard />} />
           <Route path="/host/add-room" element={<AddRoom />} />
+          <Route path="/host/rooms/:id/edit" element={<EditRoom />} />
         </Route>
 
         <Route element={<ProtectedRoute roles={['admin']} />}>

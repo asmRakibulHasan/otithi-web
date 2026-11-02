@@ -8,17 +8,19 @@ import Village from '../models/Village.js';
 import Booking from '../models/Booking.js';
 import Report from '../models/Report.js';
 import { ID_DIR } from '../middleware/upload.js';
+import { reviewSnapshot } from '../lib/listingReview.js';
 
 const STATUSES = ['approved', 'rejected'];
 
 // GET /api/admin/stats
 export async function stats(req, res) {
-  const [verifiedHosts, verifiedTravellers, pendingUsers, pendingListings, liveListings, districts, villages,
+  const [verifiedHosts, verifiedTravellers, pendingUsers, pendingListings, updatedListings, liveListings, districts, villages,
     completedBookings, upcomingBookings, income, openReports] = await Promise.all([
     User.countDocuments({ role: 'host', status: 'approved' }),
     User.countDocuments({ role: 'traveller', status: 'approved' }),
     User.countDocuments({ role: { $ne: 'admin' }, status: 'pending' }),
     Listing.countDocuments({ status: 'pending' }),
+    Listing.countDocuments({ status: 'approved', needsReview: true }),
     Listing.countDocuments({ status: 'approved' }),
     District.countDocuments(),
     Village.countDocuments(),
@@ -28,7 +30,7 @@ export async function stats(req, res) {
     Report.countDocuments({ status: 'open' }),
   ]);
   res.json({
-    verifiedHosts, verifiedTravellers, pendingUsers, pendingListings, liveListings, districts, villages,
+    verifiedHosts, verifiedTravellers, pendingUsers, pendingListings, updatedListings, liveListings, districts, villages,
     completedBookings, upcomingBookings, incomeToFamilies: income[0]?.total || 0, openReports,
   });
 }
@@ -69,10 +71,11 @@ export async function setUserStatus(req, res) {
   res.json(user);
 }
 
-// GET /api/admin/listings?status=pending
+// GET /api/admin/listings?status=pending  ·  ?needsReview=true (live rooms the host edited)
 export async function listListings(req, res) {
   const filter = {};
   if (req.query.status) filter.status = req.query.status;
+  if (req.query.needsReview === 'true') Object.assign(filter, { status: 'approved', needsReview: true });
   const listings = await Listing.find(filter)
     .populate('host', 'name status')
     .populate({ path: 'village', select: 'name district', populate: { path: 'district', select: 'name' } })
@@ -93,6 +96,10 @@ export async function setListingStatus(req, res) {
   }
 
   listing.status = req.body.status;
+  // Approving (a new room, or a live room's edits) makes this version the reference for future edits
+  listing.lastApproved = req.body.status === 'approved' ? reviewSnapshot(listing) : undefined;
+  listing.changedFields = [];
+  listing.needsReview = false;
   await listing.save();
   res.json(listing);
 }

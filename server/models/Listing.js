@@ -45,10 +45,16 @@ const listingSchema = new mongoose.Schema(
     houseRules: [{ type: String, trim: true }],
     blockedDates: [{ type: Date }],
     status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+    // Edits to a live room stay live, but trust-related changes are flagged for the admin.
+    // lastApproved = those fields as the admin last approved them; changedFields = what differs now.
+    lastApproved: { type: mongoose.Schema.Types.Mixed, default: undefined },
+    changedFields: [{ type: String }],
+    needsReview: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
 
 listingSchema.index({ status: 1, village: 1 });
+listingSchema.index({ needsReview: 1 });
 
 export default mongoose.model('Listing', listingSchema);

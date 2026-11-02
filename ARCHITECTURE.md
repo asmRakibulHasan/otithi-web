@@ -157,6 +157,9 @@ erDiagram
 | `houseRules` | [String] | |
 | `blockedDates` | [Date] | days the host marked unavailable |
 | `status` | `pending` \| `approved` \| `rejected` | only `approved` rooms are public |
+| `lastApproved` | object | the title, checklist, safety, directions, landmark and photos as the admin last approved them |
+| `changedFields` | [String] | trust-related fields that differ from `lastApproved`, e.g. `checklist.toilet` |
+| `needsReview` | Boolean | `true` while a live room has unchecked edits |
 
 **`bookings`** (`server/models/Booking.js`)
 | Field | Type | Notes |
@@ -168,6 +171,9 @@ erDiagram
 | `status` | `requested` \| `accepted` \| `declined` \| `cancelled` \| `completed` | |
 | `code` | String | e.g. `OT-7K2Q`, set when the host accepts |
 | `acceptedAt`, `completedAt`, `cancelledAt` | Date | |
+| `cancelReason` | String | optional, max 300 characters, shown to the host |
+
+**`bookednights`** (`server/models/BookedNight.js`): one row per room per night of an accepted or completed stay: `listing`, `date`, `booking`. It is the double-booking lock (§4.7). The server rebuilds it from the bookings at start-up (`syncBookedNights()`), so an older database gets its rows automatically.
 
 **`reviews`**: `booking`, `listing`, `author`, `target` (refs); `type` (`guest_to_host` \| `host_to_guest`); `rating` (1–5); `comment`; `checklistAccurate` (`yes` \| `mostly` \| `no`, guest reviews only).
 
@@ -182,7 +188,9 @@ erDiagram
 | villages | `{ name, district }` unique | the same village name can exist in different districts |
 | listings | `{ status, village }` | browse and village pages filter on these |
 | bookings | `code` unique, sparse | codes never repeat; bookings without a code are skipped |
-| bookings | `{ listing, status, checkIn }` | the double-booking overlap check |
+| bookings | `{ listing, status, checkIn }` | overlap checks for open requests |
+| bookednights | `{ listing, date }` unique | **one booking per room per night**, enforced by the database |
+| listings | `needsReview` | the admin's "Updated rooms" queue |
 | reviews | `{ booking, type }` unique | **one review per side per stay**, enforced by the database |
 | reviews | `{ listing, type }`, `{ target, type }` | room ratings and guest ratings |
 
@@ -230,8 +238,8 @@ Each feature lists its **screen**, **API**, **data**, and **how it works**.
 
 ### 4.3 Rooms and the Honest Room Condition Checklist
 
-- **Screen:** `pages/host/AddRoom.jsx`, a 4-step wizard: *Room details → Photos → Condition checklist → Directions & safety*
-- **API:** `POST /api/listings` (multipart, up to 10 photos), `PUT /api/listings/:id`, `GET /api/listings/mine`
+- **Screen:** `pages/host/AddRoom.jsx`, a 4-step wizard: *Room details → Photos → Condition checklist → Directions & safety*. The same wizard edits a room at `/host/rooms/:id/edit`, prefilled. When editing, any step can be opened and saved from. The admin's queue is `pages/admin/UpdatedRoomsSection.jsx`.
+- **API:** `POST /api/listings` (multipart, up to 10 photos), `PUT /api/listings/:id` (multipart + `photoOrder`), `GET /api/listings/mine`
 - **Data:** `listings`
 
 **The checklist** answers six fixed questions, each with a fixed set of answers:
@@ -249,7 +257,15 @@ Each feature lists its **screen**, **API**, **data**, and **how it works**.
 - The six questions are defined **once** as `CHECKLIST` in `server/models/Listing.js`. The Mongoose schema is generated from that object, so every answer is required and must be one of the allowed values. The frontend copy in `client/src/lib/listing.js` adds labels, icons and colour tones (good / warn / none).
 - Because the answers are fixed values instead of free text, travellers can **filter** on them and rooms can be compared fairly.
 - Photos go to `server/uploads/` and are served publicly at `/uploads/<file>`.
-- Every new room starts as `pending`. **Editing a room sends it back to `pending`**, so the admin re-checks any changed checklist answers. *(The edit API exists, but there's no edit screen yet.)*
+- Every new room starts as `pending`.
+
+**Editing a room** (`updateListing`, `server/lib/listingReview.js`)
+- Homes get upgraded, so a host can edit a room at any time. The village is fixed.
+- **Photos:** `photoOrder` lists the kept photos by URL and new uploads as `new:0`, `new:1`, … in display order, and the first one is the cover. Removed photos are deleted from disk after the save succeeds. The last photo can't be removed, and a bad order is rejected with its uploads cleaned up.
+- **A live room stays live.** Price, description, beds, meals and house rules apply straight away. Changes to the title, photos, checklist, safety answers, directions or landmark are compared with `lastApproved`. If anything differs, `changedFields` lists it and `needsReview` is set, and the admin sees a before → after list. *Looks good* makes the current version the new `lastApproved`, and *Unpublish* rejects the room. Undoing a change clears the flag by itself.
+- A **pending** room stays pending. A **rejected** room goes back to pending, so editing it resubmits it.
+- Capacity can't drop below the guest count of an upcoming accepted booking. A request for more guests than the current capacity can't be accepted.
+- Existing bookings keep their `totalPrice`, so a price change never affects them.
 - If saving fails, the uploaded photos are deleted so no orphan files are left behind.
 
 ### 4.4 Browse and search
@@ -260,16 +276,17 @@ Each feature lists its **screen**, **API**, **data**, and **how it works**.
 **How it works**
 - All filters are kept **in the URL** (`useSearchParams`), so a search can be shared, bookmarked, or restored with the Back button.
 - The server builds one MongoDB query: `status: 'approved'` + price range + `checklist.<key>: { $in: [...] }` + `safety.<key>: true`.
-- Rooms the host has blocked during the chosen dates are hidden with `blockedDates: { $not: { $elemMatch: { $gte: from, $lt: to } } }`.
+- Rooms the host has blocked during the chosen dates are hidden with `blockedDates: { $not: { $elemMatch: { $gte: from, $lt: to } } }`. Rooms already booked during those dates are hidden with `_id: { $nin: <rooms with a booked night in the range> }`.
 - `directions` and `blockedDates` are left out of search results (`.select('-directions -blockedDates')`).
 - Each room gets a `fitsGroup` flag instead of being hidden, because a large group can split across houses (§4.6).
 
 ### 4.5 Room page and saved rooms
 
 - **Screen:** `pages/Listing.jsx`, `components/RoomCard.jsx`
-- **API:** `GET /api/listings/:id`, `GET /api/reviews/listing/:id`
+- **API:** `GET /api/listings/:id`, `GET /api/listings/:id/availability`, `GET /api/reviews/listing/:id`
 
 **How it works**
+- **Availability calendar** (`components/AvailabilityCalendar.jsx`): the endpoint returns, from today on, the `booked` nights (no guest details), the host's `blocked` days, and the signed-in traveller's own `myRequests`. Those days are crossed out and can't be picked. A range can't cross them, but a booked day can still be a check-out day, because the guest leaves that morning. The Booking page uses the same calendar and checks the range again (`lib/availability.js`).
 - Shows the photos, the checklist as coloured chips, the safety badges, the house rules, the nearest landmark and bazar, and reviews.
 - A non-approved room returns 404, except to its owner or the admin (`optionalAuth` checks who is viewing).
 - **Exact directions are removed** from the response unless the viewer is the owner or the admin.
@@ -299,7 +316,7 @@ stateDiagram-v2
     requested --> accepted: host accepts (code issued)
     requested --> declined: host declines / another request accepted for same dates
     requested --> cancelled: traveller cancels
-    accepted --> cancelled: traveller cancels (before check-in)
+    accepted --> cancelled: traveller cancels (until 2 days before check-in)
     accepted --> completed: host enters code (from check-in day)
 ```
 
@@ -313,7 +330,18 @@ stateDiagram-v2
 - `totalPrice` is calculated on the server (`nights × pricePerNight`), so the client can't change it.
 
 **Preventing double bookings**
-Two date ranges overlap when `existing.checkIn < new.checkOut AND existing.checkOut > new.checkIn`. `datesTaken()` runs this check against **accepted** bookings and the room's `blockedDates`. It runs **twice**: once when the request is sent, and again when the host accepts, because the dates may have been taken in between. When the host accepts, every other `requested` booking that overlaps is **declined automatically** with one `updateMany`.
+- **Shown up front:** travellers see booked nights on the calendar (§4.5) and can't pick them. Search hides rooms booked on the chosen dates.
+- **Checked on the server:** `datesTaken()` checks the `bookednights` lock and the room's `blockedDates`. It runs when the request is sent and again when the host accepts.
+- **Locked by the database:** on accept, `reserveNights()` inserts one `bookednights` row per night. The unique index `{ listing, date }` means a second row for the same room and night fails with a duplicate-key error. So even if two overlapping requests are accepted at the same moment, exactly one wins and the other gets *409: These dates are already booked*. If the insert fails part-way, the rows already inserted are removed again.
+- The booking only moves to `accepted` if it is still `requested` (an atomic `findOneAndUpdate`). If the guest cancelled a moment earlier, the locked nights are released.
+- When the host accepts, every other `requested` booking that overlaps is **declined automatically** with one `updateMany`. Cancelling an accepted booking deletes its rows, so the nights become free again.
+
+**Cancellation (protecting the host)**
+- `CANCEL_DAYS_BEFORE = 2` in `bookingController.js`. `cancelRules()` is the single source of the rule, and every booking response includes `canCancel`, `cancelDeadline` and `cancelClosedReason`, so the screens never do their own date maths.
+- **Requested:** can be withdrawn until check-in day, because the host hasn't committed yet.
+- **Accepted:** can be cancelled until 2 days before check-in. For check-in on 15 Dec, the last day is 13 Dec.
+- The traveller cancels in a dialog with an optional reason (`components/CancelDialog.jsx`). The Booking page states the deadline before the request is sent, and warns when there will be no cancellation. After the deadline, the booking page shows the host's phone number instead of a Cancel button.
+- The host dashboard lists *Cancelled by guests* with the reason, and each upcoming stay shows whether the guest can still cancel.
 
 **The booking code**
 - When the host accepts, `newCode()` generates `OT-` + 4 random characters from `crypto.randomBytes`. The character set has no `0/O` or `1/I`, so the code is easy to read out over the phone. A unique index guarantees no two bookings share a code.

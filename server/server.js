@@ -4,6 +4,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import connectDB from './config/db.js';
+import { syncBookedNights } from './lib/bookedNights.js';
 import multer from 'multer';
 import healthRoutes from './routes/health.js';
 import authRoutes from './routes/auth.js';
@@ -48,6 +49,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5050;
 
-connectDB().then(() => {
+connectDB().then(async () => {
+  await syncBookedNights(); // make the double-booking lock match the bookings
   app.listen(PORT, () => console.log(`Otithi API running on http://localhost:${PORT}`));
 });

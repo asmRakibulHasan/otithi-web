@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, ShieldCheck, Flag } from 'lucide-react';
+import { Plus, ShieldCheck, Flag, Pencil } from 'lucide-react';
 import api from '../../api/axios.js';
 import useApi from '../../hooks/useApi.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -14,7 +14,7 @@ import ReviewForm from '../../components/ReviewForm.jsx';
 import ReportDialog from '../../components/ReportDialog.jsx';
 import { Loading, ErrorBox, Empty } from '../../components/State.jsx';
 import { taka, errorMessage } from '../../lib/listing.js';
-import { fmtDay, fmtRange, dayKey, todayBD } from '../../lib/booking.js';
+import { fmtDay, fmtRange, dayKey, todayBD, cancelDeadlineFor } from '../../lib/booking.js';
 
 const roomTone = { approved: 'good', pending: 'warn', rejected: 'bad' };
 const roomText = { approved: 'Live', pending: 'Waiting for admin', rejected: 'Rejected' };
@@ -66,6 +66,9 @@ export default function HostDashboard() {
   const all = bookings.data || [];
   const requests = all.filter((b) => b.status === 'requested');
   const upcoming = all.filter((b) => b.status === 'accepted');
+  // Guest cancellations for dates still ahead: those nights are free again
+  const cancelled = all.filter((b) => b.status === 'cancelled' && dayKey(b.checkIn) >= todayBD())
+    .sort((a, b) => new Date(b.cancelledAt) - new Date(a.cancelledAt));
   const completed = all.filter((b) => b.status === 'completed').sort((a, b) => new Date(b.checkIn) - new Date(a.checkIn));
   const nights = completed.reduce((s, b) => s + b.nights, 0);
   const earned = completed.reduce((s, b) => s + b.totalPrice, 0);
@@ -164,11 +167,36 @@ export default function HostDashboard() {
                   <div className="font-bold">{b.guest?.name} · {b.guests} guest{b.guests > 1 ? 's' : ''}</div>
                   <div className="text-sm text-muted">{fmtRange(b.checkIn, b.checkOut)} · {b.listing?.title}</div>
                   <div className="text-sm">Collect <strong>{taka(b.totalPrice)}</strong> in cash{b.guest?.phone ? ` · ${b.guest.phone}` : ''}</div>
+                  <div className="text-[13px] text-muted">
+                    {cancelDeadlineFor(dayKey(b.checkIn)) >= todayBD()
+                      ? `Guest can cancel until ${fmtDay(cancelDeadlineFor(dayKey(b.checkIn)), { day: 'numeric', month: 'short' })}`
+                      : 'Confirmed: the guest can no longer cancel'}
+                  </div>
                 </div>
                 <CompleteStay booking={b} onDone={bookings.reload} />
               </Card>
             ))}
           </section>
+
+          {/* Cancelled by guests */}
+          {cancelled.length > 0 && (
+            <section className="flex flex-col gap-4">
+              <div>
+                <h2 className="text-2xl font-bold">Cancelled by guests</h2>
+                <p className="text-muted">These dates are open again for other travellers.</p>
+              </div>
+              {cancelled.map((b) => (
+                <Card key={b._id} className="flex flex-col gap-1 p-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold">{b.guest?.name}</span>
+                    <Chip tone="bad">{b.acceptedAt ? 'Booking cancelled' : 'Request withdrawn'}</Chip>
+                  </div>
+                  <div className="text-sm text-muted">{fmtRange(b.checkIn, b.checkOut)} · {b.listing?.title} · cancelled {fmtDay(b.cancelledAt, { day: 'numeric', month: 'short' })}</div>
+                  {b.cancelReason && <p className="mt-1 rounded-xl bg-ground p-3 italic">“{b.cancelReason}”</p>}
+                </Card>
+              ))}
+            </section>
+          )}
 
           {/* History */}
           <section className="flex flex-col gap-4">
@@ -230,13 +258,21 @@ export default function HostDashboard() {
               </Empty>
             )}
             {rooms.data?.map((r) => (
-              <Card key={r._id} as={Link} to={`/listing/${r._id}`} className="flex gap-3 p-3 text-ink no-underline hover:text-ink hover:shadow-lg">
-                <div className="h-20 w-24 flex-none overflow-hidden rounded-xl"><Photo src={r.photos?.[0]} alt={r.title} /></div>
-                <div className="flex min-w-0 flex-col gap-1">
-                  <div className="truncate font-bold">{r.title}</div>
+              <Card key={r._id} className="flex gap-3 p-3">
+                <Link to={`/listing/${r._id}`} className="h-20 w-24 flex-none overflow-hidden rounded-xl" aria-hidden="true" tabIndex={-1}><Photo src={r.photos?.[0]} alt="" /></Link>
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <Link to={`/listing/${r._id}`} className="truncate font-bold text-ink no-underline hover:text-paddy hover:underline">{r.title}</Link>
                   <div className="text-sm text-muted">Sleeps {r.capacity} · {taka(r.pricePerNight)} / night</div>
-                  <Chip tone={roomTone[r.status]} className="self-start">{roomText[r.status]}</Chip>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Chip tone={roomTone[r.status]}>{roomText[r.status]}</Chip>
+                    {r.status === 'approved' && r.needsReview && <Chip tone="warn">Changes being checked</Chip>}
+                  </div>
                 </div>
+                {user?.status === 'approved' && (
+                  <Button variant="ghost" to={`/host/rooms/${r._id}/edit`} className="self-start px-3" aria-label={`Edit ${r.title}`}>
+                    <Pencil size={16} aria-hidden="true" />Edit
+                  </Button>
+                )}
               </Card>
             ))}
           </section>

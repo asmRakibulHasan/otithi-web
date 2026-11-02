@@ -9,6 +9,7 @@ import { Loading, ErrorBox, Empty } from '../../components/State.jsx';
 import { answer, errorMessage, taka } from '../../lib/listing.js';
 import ReportsSection from './ReportsSection.jsx';
 import LocationsSection from './LocationsSection.jsx';
+import UpdatedRoomsSection from './UpdatedRoomsSection.jsx';
 
 const initials = (name = '') => name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 const ago = (d) => {
@@ -74,7 +75,7 @@ export default function AdminDashboard() {
     { l: 'Districts covered', v: s.districts, n: `${s.villages} villages · ${s.liveListings} live rooms` },
     { l: 'Income to families', v: taka(s.incomeToFamilies), n: 'Paid in cash, 0% commission' },
     { l: 'Pending verification', v: s.pendingUsers, n: 'Hosts and travellers' },
-    { l: 'Rooms to review', v: s.pendingListings, n: 'Waiting for approval' },
+    { l: 'Rooms to review', v: s.pendingListings, n: s.updatedListings ? `+ ${s.updatedListings} live room${s.updatedListings > 1 ? 's' : ''} edited` : 'Waiting for approval' },
     { l: 'Open reports', v: s.openReports, n: 'From guests and hosts' },
   ] : [];
 
@@ -184,6 +185,8 @@ export default function AdminDashboard() {
           ))}
         </div>
       </section>
+
+      <UpdatedRoomsSection act={act} onChange={stats.reload} />
 
       <ReportsSection onChange={stats.reload} />
       <LocationsSection onChange={stats.reload} />

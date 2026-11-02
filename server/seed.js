@@ -8,6 +8,9 @@ import District from './models/District.js';
 import Village from './models/Village.js';
 import Listing from './models/Listing.js';
 import Booking from './models/Booking.js';
+import BookedNight from './models/BookedNight.js';
+import { syncBookedNights } from './lib/bookedNights.js';
+import { reviewSnapshot } from './lib/listingReview.js';
 import Review from './models/Review.js';
 import Report from './models/Report.js';
 
@@ -127,7 +130,7 @@ async function seed() {
   await connectDB();
 
   await Promise.all([User.deleteMany(), District.deleteMany(), Village.deleteMany(), Listing.deleteMany(), Booking.deleteMany(),
-    Review.deleteMany(), Report.deleteMany()]);
+    Review.deleteMany(), Report.deleteMany(), BookedNight.deleteMany()]);
 
   const villageByName = {};
   for (const [districtName, villages] of Object.entries(districts)) {
@@ -155,6 +158,10 @@ async function seed() {
   for (const [key, fields] of listings) {
     const host = hostByKey[key];
     const room = await Listing.create({ status: 'approved', ...fields, host: host._id, village: host.village, photos: [] });
+    if (room.status === 'approved') {
+      room.lastApproved = reviewSnapshot(room);
+      await room.save();
+    }
     roomByHost[key] ||= room; // first room of each host
   }
 
@@ -207,6 +214,7 @@ async function seed() {
 
   roomByHost.rahima.blockedDates = [day(17), day(18)];
   await roomByHost.rahima.save();
+  await syncBookedNights(); // lock the nights of the accepted stays
 
   console.log(`Seeded ${Object.keys(districts).length} districts, ${Object.keys(villageByName).length} villages, ${hosts.length + 4} users, ${listings.length} rooms, 8 bookings, 5 reviews, 2 reports`);
   console.log('Admin:     admin@otithi.local / admin123');
