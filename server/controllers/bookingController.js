@@ -66,6 +66,14 @@ function withPrivateDetails(booking) {
   return { ...b, unlocked, ...cancelRules(b) };
 }
 
+// The booking code proves the guest arrived, so the host must not see it before the
+// stay is completed. Otherwise the host could mark a stay completed without the guest.
+function hideCodeFromHost(booking) {
+  const b = booking.toObject ? booking.toObject() : { ...booking };
+  if (b.status !== 'completed') delete b.code;
+  return b;
+}
+
 async function findOwned(req, res, role) {
   if (!mongoose.isValidObjectId(req.params.id)) {
     res.status(404).json({ message: 'Booking not found' });
@@ -137,7 +145,9 @@ export async function getBooking(req, res) {
     .populate('guest', 'name');
   if (!booking) return res.status(404).json({ message: 'Booking not found' });
   const reviewed = await reviewedIds(req.user._id, [booking._id]);
-  res.json({ ...withPrivateDetails(booking), reviewedByMe: reviewed.has(String(booking._id)) });
+  const isHost = String(booking.host?._id || booking.host) === String(req.user._id);
+  const details = withPrivateDetails(booking);
+  res.json({ ...(isHost ? hideCodeFromHost(details) : details), reviewedByMe: reviewed.has(String(booking._id)) });
 }
 
 // GET /api/bookings/host — all bookings for the host's rooms, with each guest's history
@@ -162,7 +172,7 @@ export async function hostBookings(req, res) {
     const guest = b.guest && { ...b.guest, phone: unlocked ? b.guest.phone : undefined };
     const gid = String(b.guest?._id);
     return {
-      ...b,
+      ...hideCodeFromHost(b),
       guest,
       guestHistory: { stays: 0, hosts: 0, ...byGuest[gid], reviews: ratings[gid] || { avg: null, count: 0, latest: null } },
       reviewedByMe: reviewed.has(String(b._id)),
@@ -215,7 +225,7 @@ export async function acceptBooking(req, res) {
     { status: 'declined' }
   );
 
-  res.json(accepted);
+  res.json(hideCodeFromHost(accepted));
 }
 
 // PUT /api/bookings/:id/decline — host
